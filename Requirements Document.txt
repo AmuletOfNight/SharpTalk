@@ -1,0 +1,97 @@
+Project: "SharpTalk" - Requirements Document
+1. Project Overview
+SharpTalk is a real-time team collaboration tool that facilitates communication through persistent chat rooms (channels), direct messages, and private groups. The system is organized by "Workspaces."
+2. User Roles
+System Admin: Can manage global settings (rarely used in MVP).
+Workspace Owner: Creator of the workspace. Can delete the workspace and manage billing (if applicable).
+Workspace Admin: Can manage users, channels, and moderation within a specific workspace.
+Member: Standard user. Can send messages, join public channels, and upload files.
+Guest: Restricted access to specific channels (Future Scope).
+3. Functional Requirements
+3.1 Authentication & Identity
+Sign Up/Login: Users must be able to create accounts using Email/Password.
+JWT Auth: Secure API endpoints using JSON Web Tokens.
+Workspace Invitation: Users join workspaces via a unique Invite Link or email invitation.
+User Profile: Users can upload an avatar, set a display name, and set a "Status" (e.g., "In a meeting").
+3.2 Workspace Management
+Multi-Tenancy: A single user account can belong to multiple independent Workspaces.
+Switching: Users can switch between Workspaces without logging out.
+3.3 Channel Management
+Create Channel: Users can create channels.
+Visibility:
+Public: Anyone in the workspace can search for and join.
+Private: Invite-only; invisible to non-members.
+Channel List: The sidebar must display a list of Joined Channels and Unread Message counts for each.
+3.4 Messaging (The Core)
+Real-Time Delivery: Messages must appear instantly on connected clients without refreshing (SignalR).
+Rich Text: Support for Markdown (Bold, Italic, Code Blocks, Blockquotes).
+Edit/Delete: Users can edit or delete their own messages.
+Constraint: Edited messages show an (edited) tag.
+Threading: Users can reply to a specific message, creating a side-thread context.
+Reactions: Users can react to messages with Emojis.
+Mentions:
+@username: Triggers a specific notification for that user.
+@channel: Notifies everyone in the channel.
+3.5 Direct Messaging (DM)
+1:1 DMs: Private conversation between two users.
+Group DMs: Private conversation between 3 to 9 users (adhoc groups).
+Self DM: A space for the user to jot down notes to themselves.
+3.6 Presence & Activity
+Online Status: Visual indicator (Green dot) when a user has an active WebSocket connection.
+Typing Indicator: "John is typing..." appears in the chat footer when another user is composing.
+Last Seen: If offline, show "Last seen X minutes ago."
+3.7 File Sharing
+Upload: Users can drag and drop images or documents into the chat.
+Preview: Images and GIFs should auto-expand in the chat feed.
+Storage: Files are uploaded to cloud storage (AWS S3 / Azure Blob), and the URL is stored in the DB.
+3.8 Search
+Message Search: Users can search for text strings within a specific channel or the whole workspace.
+User Search: "Quick Switcher" (Ctrl+K) to jump to a user or channel by name.
+4. Non-Functional Requirements
+4.1 Performance
+Latency: Message delivery should occur in under 200ms.
+History Loading: Infinite scroll (Pagination) should be used. Do not load all 50,000 messages in a channel at once; load the last 50, then fetch more as the user scrolls up.
+4.2 Scalability
+SignalR Backplane: The system should be designed to support a Redis Backplane (allows scaling to multiple server instances while keeping sockets connected).
+4.3 Security
+Socket Security: Ensure users cannot listen to Socket Hubs for channels they are not members of.
+Input Sanitization: Prevent XSS attacks (rendering HTML in messages).
+5. Technical Stack Recommendation
+Backend
+Framework: ASP.NET Core 10 Web API.
+Real-Time: SignalR (Core library).
+Database: PostgreSQL (Great for JSON support) or SQL Server.
+ORM: Entity Framework Core.
+Caching/PubSub: Redis (Crucial for storing online status and SignalR scale-out).
+Frontend (Options)
+Option A (Pure .NET): Blazor WebAssembly. (Good for sharing DTOs between front/back).
+Option B (Industry Standard): React + TypeScript or Angular.
+Infrastructure
+File Storage: Azure Blob Storage or MinIO (for local dev).
+Containerization: Docker (Compose file for API, DB, and Redis).
+6. Suggested Database Schema (Simplified Entities)
+To give you a head start on the EF Core structure:
+User: Id, Username, Email, PasswordHash, AvatarUrl
+Workspace: Id, Name, OwnerId
+WorkspaceMember: WorkspaceId, UserId, Role (Join Table)
+Channel: Id, WorkspaceId, Name, IsPrivate, Description
+ChannelMember: ChannelId, UserId (Tracks who is in which channel)
+Message: Id, ChannelId, UserId, Content, Timestamp, ParentMessageId (for threads)
+Attachment: Id, MessageId, FileUrl, FileType
+Reaction: Id, MessageId, UserId, EmojiCode
+7. Phasing Strategy (How to build it)
+Phase 1: The MVP (Minimum Viable Product)
+Single Workspace only.
+Public Channels only.
+Real-time text messaging.
+Simple Login.
+Phase 2: The "Slack" Feel
+Direct Messages.
+Typing indicators.
+Online/Offline status.
+Unread message counters.
+Phase 3: Advanced
+File uploads.
+Message Threads.
+Search functionality.
+Notifications.
