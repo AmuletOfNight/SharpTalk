@@ -1,6 +1,34 @@
-@SharpTalk.Api_HostAddress = http://localhost:5298
+@SharpTalk.Api_HostAddress = http://localhost:5052
 
-GET {{SharpTalk.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Register User
+POST {{SharpTalk.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
 
-###
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "Password123!"
+}
+
+### Login User
+POST {{SharpTalk.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Password123!"
+}
+
+### Create Workspace
+POST {{SharpTalk.Api_HostAddress}}/api/workspace
+Content-Type: application/json
+Authorization: Bearer <Replace_With_Token>
+
+{
+  "name": "My Tech Startup"
+}
+
+### Get Workspaces
+GET {{SharpTalk.Api_HostAddress}}/api/workspace
+Authorization: Bearer <Replace_With_Token>
+
