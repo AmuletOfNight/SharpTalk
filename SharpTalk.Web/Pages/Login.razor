@@ -1,0 +1,60 @@
+@page "/login"
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Auth
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<div class="auth-container">
+    <h3>Login</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+            <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="loginRequest" OnValidSubmit="HandleLogin">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label>Email</label>
+            <InputText @bind-Value="loginRequest.Email" class="form-control" />
+        </div>
+
+        <div class="form-group">
+            <label>Password</label>
+            <InputText @bind-Value="loginRequest.Password" type="password" class="form-control" />
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-3">Login</button>
+        <div class="mt-2">
+            <a href="/register">Don't have an account? Register</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new LoginRequest();
+    private string ErrorMessage = string.Empty;
+
+    private async Task HandleLogin()
+    {
+        ErrorMessage = string.Empty;
+        var response = await Http.PostAsJsonAsync("api/auth/login", loginRequest);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            await LocalStorage.SetItemAsync("authToken", authResponse.Token);
+            ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticated(authResponse.Token);
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            ErrorMessage = await response.Content.ReadAsStringAsync();
+        }
+    }
+}

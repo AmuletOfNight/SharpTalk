@@ -1,0 +1,65 @@
+@page "/register"
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Auth
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<div class="auth-container">
+    <h3>Register</h3>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <EditForm Model="registerRequest" OnValidSubmit="HandleRegistration">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label>Username</label>
+            <InputText @bind-Value="registerRequest.Username" class="form-control" />
+        </div>
+
+        <div class="form-group">
+            <label>Email</label>
+            <InputText @bind-Value="registerRequest.Email" class="form-control" />
+        </div>
+
+        <div class="form-group">
+            <label>Password</label>
+            <InputText @bind-Value="registerRequest.Password" type="password" class="form-control" />
+        </div>
+
+        <button type="submit" class="btn btn-success mt-3">Register</button>
+        <div class="mt-2">
+            <a href="/login">Already have an account? Login</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private RegisterRequest registerRequest = new RegisterRequest();
+    private string ErrorMessage = string.Empty;
+
+    private async Task HandleRegistration()
+    {
+        ErrorMessage = string.Empty;
+        var response = await Http.PostAsJsonAsync("api/auth/register", registerRequest);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            await LocalStorage.SetItemAsync("authToken", authResponse.Token);
+            ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticated(authResponse.Token);
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            ErrorMessage = await response.Content.ReadAsStringAsync();
+        }
+    }
+}
