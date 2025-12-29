@@ -2,10 +2,12 @@
 @using SharpTalk.Web.Services
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @implements IAsyncDisposable
 @inject ChatService ChatService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
+@inject UrlUtilityService UrlUtilityService
 
 <div class="chat-area">
     <div class="messages-list" id="messagesList">
@@ -13,7 +15,7 @@
         {
             var isMine = msg.UserId == currentUserId;
             <div class='message-item @(isMine ? "message-mine" : "message-others")'>
-                <img src="@GetAvatarUrl(msg.AvatarUrl)"
+                <img src="@UrlUtilityService.GetAvatarUrl(msg.AvatarUrl)"
                      class="message-avatar"
                      alt="@msg.Username" />
                 <div class="message-body">
@@ -23,6 +25,33 @@
                     </div>
                     <div class="bubble-container">
                         <div class="message-content">@msg.Content</div>
+                        @if (msg.Attachments.Any())
+                        {
+                            <div class="message-attachments">
+                                @foreach (var attachment in msg.Attachments)
+                                {
+                                    <div class="attachment-item">
+                                        @if (IsImage(attachment.FileType))
+                                        {
+                                            <img src="@UrlUtilityService.GetFileUrl(attachment.FileUrl)"
+                                                 class="attachment-image"
+                                                 alt="@attachment.FileName"
+                                                 @onclick="() => OpenImagePreview(attachment)" />
+                                        }
+                                        else
+                                        {
+                                            <div class="attachment-file" @onclick="() => DownloadFile(attachment)">
+                                                <span class="file-icon">@GetFileIcon(attachment.FileType)</span>
+                                                <div class="file-info">
+                                                    <span class="file-name">@attachment.FileName</span>
+                                                    <span class="file-size">@FormatFileSize(attachment.FileSize)</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -39,12 +68,63 @@
     </div>
 
     <div class="message-input">
+        @if (selectedFiles.Any())
+        {
+            <div class="file-preview-area">
+                @foreach (var file in selectedFiles)
+                {
+                    <div class="file-preview-card">
+                        <div class="file-preview-icon @GetFileIconClass(file.ContentType)">
+                            <span>@GetFileIconEmoji(file.ContentType)</span>
+                        </div>
+                        <div class="file-preview-info">
+                            <span class="file-preview-name" title="@file.Name">@file.Name</span>
+                            <span class="file-preview-size">@FormatFileSize(file.Size)</span>
+                        </div>
+                        <button type="button" class="file-preview-remove" @onclick="() => RemoveFile(file)" title="Remove file">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                }
+            </div>
+        }
         <form @onsubmit="SendMessage">
-            <input type="text" class="form-control" placeholder="Message #Channel" @bind="newMessage"
-                @bind:event="oninput" />
+            <div class="chat-input-container">
+                <label class="attach-btn" title="Attach files">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                    </svg>
+                    <InputFile OnChange="HandleFileSelect" multiple />
+                </label>
+                <input type="text" class="message-input-field" placeholder="Message #Channel" @bind="newMessage"
+                    @bind:event="oninput" />
+                <button type="submit" class="send-btn" title="Send message" disabled="@(!CanSendMessage())">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
         </form>
     </div>
 </div>
+
+<!-- Image Preview Modal -->
+@if (previewAttachment != null)
+{
+    <div class="image-preview-modal" @onclick="CloseImagePreview">
+        <div class="image-preview-content" @onclick:stopPropagation>
+            <img src="@UrlUtilityService.GetFileUrl(previewAttachment.FileUrl)" alt="@previewAttachment.FileName" />
+            <div class="image-preview-actions">
+                <button type="button" class="btn btn-secondary" @onclick="CloseImagePreview">Close</button>
+                <button type="button" class="btn btn-primary" @onclick="() => DownloadFile(previewAttachment)">Download</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter]
@@ -69,6 +149,10 @@
     private Dictionary<int, string> TypingUsers = new Dictionary<int, string>();
     private System.Timers.Timer? typingTimer;
     private bool isTypingSent = false;
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+    private List<AttachmentDto> uploadedAttachments = new List<AttachmentDto>();
+    private bool isUploading = false;
+    private AttachmentDto? previewAttachment;
 
     protected override async Task OnInitializedAsync()
     {
@@ -93,12 +177,16 @@
             _currentChannelId = ChannelId;
             Messages.Clear();
 
-            // Load history
-            var history = await ChatService.GetMessageHistoryAsync(ChannelId);
-            Messages.AddRange(history);
-            StateHasChanged();
+            // Only load history and join if channel ID is valid
+            if (ChannelId > 0)
+            {
+                // Load history
+                var history = await ChatService.GetMessageHistoryAsync(ChannelId);
+                Messages.AddRange(history);
+                StateHasChanged();
 
-            await ChatService.JoinChannelAsync(ChannelId);
+                await ChatService.JoinChannelAsync(ChannelId);
+            }
         }
     }
 
@@ -137,7 +225,8 @@
 
     private void HandleTyping()
     {
-        if (string.IsNullOrWhiteSpace(newMessage)) return;
+        // Prevent sending typing indicators to invalid channel (0)
+        if (ChannelId <= 0 || string.IsNullOrWhiteSpace(newMessage)) return;
 
         if (!isTypingSent)
         {
@@ -165,25 +254,151 @@
 
     private async Task SendMessage()
     {
-        if (!string.IsNullOrWhiteSpace(newMessage))
+        // Prevent sending messages to invalid channel (0)
+        if (ChannelId <= 0)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(newMessage) || selectedFiles.Any())
         {
             var content = newMessage;
             newMessage = string.Empty;
             isTypingSent = false;
             typingTimer?.Stop();
 
-            await ChatService.SendMessageAsync(ChannelId, content);
+            // Upload files first if any
+            List<int> attachmentIds = new List<int>();
+            if (selectedFiles.Any())
+            {
+                isUploading = true;
+                StateHasChanged();
+
+                uploadedAttachments = await ChatService.UploadFilesAsync(selectedFiles, ChannelId);
+                attachmentIds = uploadedAttachments.Select(a => a.Id).ToList();
+
+                selectedFiles.Clear();
+                isUploading = false;
+            }
+
+            await ChatService.SendMessageAsync(ChannelId, content, attachmentIds);
             await ChatService.SendTypingIndicatorAsync(ChannelId, false);
         }
     }
 
-    private string GetAvatarUrl(string? avatarUrl)
+    private async void HandleFileSelect(InputFileChangeEventArgs e)
     {
-        if (string.IsNullOrEmpty(avatarUrl) || avatarUrl.StartsWith("data:") || avatarUrl.StartsWith("http"))
+        foreach (var file in e.GetMultipleFiles())
         {
-            return avatarUrl ?? "/images/default-avatar.svg";
+            // Validate file size
+            var maxSize = file.ContentType.StartsWith("image/") ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+            if (file.Size > maxSize)
+            {
+                continue; // Skip files that are too large
+            }
+
+            selectedFiles.Add(file);
         }
-        return $"http://localhost:5298{avatarUrl}";
+        StateHasChanged();
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        StateHasChanged();
+    }
+
+    private void OpenImagePreview(AttachmentDto attachment)
+    {
+        previewAttachment = attachment;
+        StateHasChanged();
+    }
+
+    private void CloseImagePreview()
+    {
+        previewAttachment = null;
+        StateHasChanged();
+    }
+
+    private async void DownloadFile(AttachmentDto attachment)
+    {
+        var downloadUrl = await ChatService.DownloadAttachmentAsync(attachment.Id);
+        if (!string.IsNullOrEmpty(downloadUrl))
+        {
+            await JSRuntime.InvokeVoidAsync("downloadFile", downloadUrl, attachment.FileName);
+        }
+    }
+
+    private bool IsImage(string fileType)
+    {
+        return fileType.StartsWith("image/");
+    }
+
+    private string GetFileIcon(string fileType)
+    {
+        return fileType switch
+        {
+            var f when f.StartsWith("image/") => "🖼️",
+            var f when f.Contains("pdf") => "📄",
+            var f when f.Contains("word") => "📝",
+            var f when f.Contains("excel") || f.Contains("spreadsheet") => "📊",
+            var f when f.Contains("powerpoint") || f.Contains("presentation") => "📽",
+            var f when f.Contains("zip") || f.Contains("rar") || f.Contains("7z") => "📦",
+            var f when f.Contains("text") => "📃",
+            _ => "📎"
+        };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size = size / 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
+    }
+
+    private string GetFileIconClass(string? contentType)
+    {
+        if (string.IsNullOrEmpty(contentType)) return "default";
+        
+        if (contentType.StartsWith("image/")) return "image";
+        if (contentType.Contains("pdf")) return "pdf";
+        if (contentType.Contains("word") || contentType.Contains("document") ||
+            contentType.Contains("excel") || contentType.Contains("spreadsheet") ||
+            contentType.Contains("powerpoint") || contentType.Contains("presentation") ||
+            contentType.Contains("text")) return "document";
+        if (contentType.Contains("zip") || contentType.Contains("rar") ||
+            contentType.Contains("7z") || contentType.Contains("tar") ||
+            contentType.Contains("gzip")) return "archive";
+        
+        return "default";
+    }
+
+    private string GetFileIconEmoji(string? contentType)
+    {
+        if (string.IsNullOrEmpty(contentType)) return "📎";
+        
+        if (contentType.StartsWith("image/")) return "🖼️";
+        if (contentType.Contains("pdf")) return "📄";
+        if (contentType.Contains("word") || contentType.Contains("document")) return "📝";
+        if (contentType.Contains("excel") || contentType.Contains("spreadsheet")) return "📊";
+        if (contentType.Contains("powerpoint") || contentType.Contains("presentation")) return "📽";
+        if (contentType.Contains("text")) return "📃";
+        if (contentType.Contains("zip") || contentType.Contains("rar") ||
+            contentType.Contains("7z") || contentType.Contains("tar") ||
+            contentType.Contains("gzip")) return "📦";
+        
+        return "📎";
+    }
+
+    private bool CanSendMessage()
+    {
+        return !string.IsNullOrWhiteSpace(newMessage) || selectedFiles.Any();
     }
 
     public async ValueTask DisposeAsync()

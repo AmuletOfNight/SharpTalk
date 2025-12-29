@@ -134,10 +134,12 @@
     {
         CurrentWorkspace = workspace;
         CurrentChannelId = null; // Reset channel when workspace changes
+        StateHasChanged();
     }
 
     private void HandleChannelSelected(int channelId)
     {
         CurrentChannelId = channelId;
+        StateHasChanged();
     }
 }

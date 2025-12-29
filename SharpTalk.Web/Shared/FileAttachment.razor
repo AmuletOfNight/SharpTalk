@@ -1,0 +1,123 @@
+@using SharpTalk.Shared.DTOs
+@inject SharpTalk.Web.Services.ChatService ChatService
+@inject IJSRuntime JSRuntime
+
+<div class="file-attachment @GetFileClass()">
+    @if (IsImage())
+    {
+        <div class="file-preview">
+            <img src="@Attachment.FileUrl" alt="@Attachment.FileName" class="file-image" />
+        </div>
+    }
+    else
+    {
+        <div class="file-icon">
+            <span class="file-extension">@GetFileExtension()</span>
+        </div>
+    }
+    
+    <div class="file-info">
+        <div class="file-name" title="@Attachment.FileName">@Attachment.FileName</div>
+        <div class="file-size">@FormatFileSize(Attachment.FileSize)</div>
+    </div>
+    
+    <button @onclick="DownloadFile" class="file-download" title="Download file" disabled="@isDownloading">
+        @if (isDownloading)
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        }
+        else
+        {
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+        }
+    </button>
+</div>
+
+@code {
+    [Parameter]
+    public AttachmentDto Attachment { get; set; } = default!;
+    
+    private bool isDownloading = false;
+    
+    private async Task DownloadFile()
+    {
+        isDownloading = true;
+        try
+        {
+            var dataUrl = await ChatService.DownloadAttachmentAsync(Attachment.Id);
+            if (!string.IsNullOrEmpty(dataUrl))
+            {
+                await JSRuntime.InvokeVoidAsync("downloadFile", dataUrl, Attachment.FileName);
+            }
+            else
+            {
+                Console.WriteLine($"Failed to download attachment: {Attachment.FileName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading file: {ex.Message}");
+        }
+        finally
+        {
+            isDownloading = false;
+        }
+    }
+
+    private string GetFileClass()
+    {
+        if (IsImage()) return "file-attachment-image";
+        if (IsPdf()) return "file-attachment-pdf";
+        if (IsDocument()) return "file-attachment-document";
+        if (IsArchive()) return "file-attachment-archive";
+        return "file-attachment-other";
+    }
+
+    private bool IsImage()
+    {
+        var ext = GetFileExtension().ToLower();
+        return ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "gif" || ext == "bmp" || ext == "webp";
+    }
+
+    private bool IsPdf()
+    {
+        return GetFileExtension().ToLower() == "pdf";
+    }
+
+    private bool IsDocument()
+    {
+        var ext = GetFileExtension().ToLower();
+        return ext == "doc" || ext == "docx" || ext == "xls" || ext == "xlsx" || ext == "ppt" || ext == "pptx" || ext == "txt";
+    }
+
+    private bool IsArchive()
+    {
+        var ext = GetFileExtension().ToLower();
+        return ext == "zip" || ext == "rar" || ext == "7z" || ext == "tar" || ext == "gz";
+    }
+
+    private string GetFileExtension()
+    {
+        var parts = Attachment.FileName.Split('.');
+        return parts.Length > 1 ? parts[^1] : "file";
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+        
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size /= 1024;
+        }
+        
+        return $"{size:0.##} {sizes[order]}";
+    }
+}

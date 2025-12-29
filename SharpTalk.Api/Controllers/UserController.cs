@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SharpTalk.Api.Data;
 using SharpTalk.Shared.DTOs;
 
@@ -11,11 +12,13 @@ public class UserController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
 
-    public UserController(ApplicationDbContext context, IWebHostEnvironment environment)
+    public UserController(ApplicationDbContext context, IWebHostEnvironment environment, IConfiguration configuration)
     {
         _context = context;
         _environment = environment;
+        _configuration = configuration;
     }
 
     [HttpGet("profile")]
@@ -98,11 +101,11 @@ public class UserController : ControllerBase
             return BadRequest("Invalid file type. Allowed types: JPEG, PNG, GIF, WebP");
         }
 
-        // Validate file size (max 2MB)
-        const int maxFileSize = 2 * 1024 * 1024;
-        if (avatar.Length > maxFileSize)
+        // Validate file size
+        var maxAvatarFileSize = int.Parse(_configuration["FileUploadSettings:MaxAvatarFileSizeBytes"] ?? "2097152");
+        if (avatar.Length > maxAvatarFileSize)
         {
-            return BadRequest("File size too large. Maximum size: 2MB");
+            return BadRequest($"File size too large. Maximum size: {maxAvatarFileSize / (1024 * 1024)}MB");
         }
 
         // Get user to retrieve username

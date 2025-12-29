@@ -1,6 +1,7 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
 @inject UserService UserService
+@inject UrlUtilityService UrlUtilityService
 
 @if (IsOpen)
 {
@@ -15,7 +16,7 @@
                 <!-- Avatar Section -->
                 <div class="avatar-section">
                     <div class="avatar-container">
-                        <img src="@(previewUrl ?? GetAvatarUrl(CurrentUser?.AvatarUrl))"
+                        <img src="@(previewUrl ?? UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl))"
                              class="avatar-preview"
                              alt="Profile Avatar" />
                         @if (isUploading)
@@ -195,12 +196,4 @@
         StateHasChanged();
     }
 
-    private string GetAvatarUrl(string? avatarUrl)
-    {
-        if (string.IsNullOrEmpty(avatarUrl) || avatarUrl.StartsWith("data:") || avatarUrl.StartsWith("http"))
-        {
-            return avatarUrl ?? "/images/default-avatar.svg";
-        }
-        return $"http://localhost:5298{avatarUrl}";
-    }
 }

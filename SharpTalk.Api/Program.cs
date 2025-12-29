@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SharpTalk.Api.Data;
+using SharpTalk.Api.Services;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddSignalR();
+builder.Services.AddScoped<FileUploadService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379"));
@@ -89,6 +91,13 @@ app.UseStaticFiles(new StaticFileOptions
         // Add security headers
         ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
         ctx.Context.Response.Headers.Append("X-Frame-Options", "DENY");
+        
+        // Log static file requests for debugging
+        var logger = ctx.Context.RequestServices.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Program>>();
+        logger.LogInformation("Static file request: Path={Path}, FileExists={Exists}, ContentType={ContentType}",
+            ctx.Context.Request.Path,
+            ctx.File.Exists,
+            ctx.Context.Response.ContentType);
     }
 });
 

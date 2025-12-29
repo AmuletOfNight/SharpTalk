@@ -1,11 +1,12 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
 @inject UserService UserService
+@inject UrlUtilityService UrlUtilityService
 
 <div class="user-profile-container">
     <div class="user-profile" @onclick="ToggleDropdown">
         <div class="user-avatar-wrapper">
-            <img src="@GetAvatarUrl(CurrentUser?.AvatarUrl)"
+            <img src="@UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl)"
                  class="user-avatar @(CurrentUser?.Status == "Online" ? "online" : CurrentUser?.Status == "Away" ? "away" : "")"
                  alt="@CurrentUser?.Username" />
         </div>
@@ -80,15 +81,6 @@
             "Offline" => "Offline",
             _ => "Online"
         };
-    }
-
-    private string GetAvatarUrl(string? avatarUrl)
-    {
-        if (string.IsNullOrEmpty(avatarUrl) || avatarUrl.StartsWith("data:") || avatarUrl.StartsWith("http"))
-        {
-            return avatarUrl ?? "/images/default-avatar.svg";
-        }
-        return $"http://localhost:5298{avatarUrl}";
     }
 
     public void Dispose()

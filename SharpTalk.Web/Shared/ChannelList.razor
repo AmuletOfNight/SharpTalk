@@ -110,7 +110,17 @@
             await CheckOwnership();
             await LoadChannels();
             await LoadMembers();
-            selectedChannelId = 0;
+            
+            // Auto-select the first channel if available
+            if (Channels.Any())
+            {
+                await SelectChannel(Channels.First().Id);
+            }
+            else
+            {
+                selectedChannelId = 0;
+            }
+            
             isLoading = false;
         }
     }

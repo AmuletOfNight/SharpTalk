@@ -2,6 +2,7 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.Extensions.Configuration;
 using SharpTalk.Shared.DTOs;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -14,6 +15,7 @@ public class UserService
     private readonly ILocalStorageService _localStorage;
     private readonly NavigationManager _navigationManager;
     private readonly AuthenticationStateProvider _authStateProvider;
+    private readonly IConfiguration _configuration;
 
     public event Action<UserInfo>? OnUserInfoChanged;
 
@@ -21,12 +23,14 @@ public class UserService
     public UserInfo? CurrentUser => _currentUser;
 
     public UserService(HttpClient httpClient, ILocalStorageService localStorage,
-        NavigationManager navigationManager, AuthenticationStateProvider authStateProvider)
+        NavigationManager navigationManager, AuthenticationStateProvider authStateProvider,
+        IConfiguration configuration)
     {
         _httpClient = httpClient;
         _localStorage = localStorage;
         _navigationManager = navigationManager;
         _authStateProvider = authStateProvider;
+        _configuration = configuration;
     }
 
     public async Task<UserInfo?> GetCurrentUserAsync()
@@ -113,8 +117,15 @@ public class UserService
         try
         {
             var content = new MultipartFormDataContent();
-            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024));
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+            var maxAvatarFileSize = int.Parse(_configuration["FileUploadSettings:MaxAvatarFileSizeBytes"] ?? "2097152");
+            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: maxAvatarFileSize));
+            
+            // Handle empty or null ContentType by using a default MIME type
+            var contentType = string.IsNullOrEmpty(file.ContentType)
+                ? "application/octet-stream"
+                : file.ContentType;
+            
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             content.Add(fileContent, "avatar", file.Name);
 
             var response = await _httpClient.PostAsync("api/user/avatar", content);

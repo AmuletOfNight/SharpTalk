@@ -1,8 +1,10 @@
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.SignalR.Client;
 using SharpTalk.Shared.DTOs;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 
 namespace SharpTalk.Web.Services;
 
@@ -12,16 +14,18 @@ public class ChatService : IAsyncDisposable
     private readonly HttpClient _httpClient;
     private readonly NavigationManager _navigationManager;
     private readonly ILocalStorageService _localStorage;
+    private readonly IConfiguration _configuration;
 
     public event Action<MessageDto>? OnMessageReceived;
     public event Action<UserStatusDto>? OnUserStatusChanged;
     public event Action<int, int, string, bool>? OnUserTyping;
 
-    public ChatService(HttpClient httpClient, NavigationManager navigationManager, ILocalStorageService localStorage)
+    public ChatService(HttpClient httpClient, NavigationManager navigationManager, ILocalStorageService localStorage, IConfiguration configuration)
     {
         _httpClient = httpClient;
         _navigationManager = navigationManager;
         _localStorage = localStorage;
+        _configuration = configuration;
     }
 
     public async Task InitializeAsync()
@@ -33,8 +37,10 @@ public class ChatService : IAsyncDisposable
 
         if (_hubConnection == null)
         {
+            var signalRHubUrl = _configuration["ApiSettings:SignalRHubUrl"] ?? "http://localhost:5298/chatHub";
+            
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl("http://localhost:5298/chatHub", options =>
+                .WithUrl(signalRHubUrl, options =>
                 {
                     options.AccessTokenProvider = async () =>
                     {
@@ -97,12 +103,75 @@ public class ChatService : IAsyncDisposable
         }
     }
 
-    public async Task SendMessageAsync(int channelId, string content)
+    public async Task SendMessageAsync(int channelId, string content, List<int> attachmentIds = null)
     {
         if (_hubConnection is not null && _hubConnection.State == HubConnectionState.Connected)
         {
-            await _hubConnection.SendAsync("SendMessage", channelId, content);
+            await _hubConnection.SendAsync("SendMessage", channelId, content, attachmentIds);
         }
+    }
+
+    public async Task<List<AttachmentDto>> UploadFilesAsync(List<IBrowserFile> files, int channelId)
+    {
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        Console.WriteLine($"[DEBUG] HttpClient BaseAddress: {_httpClient.BaseAddress}");
+        Console.WriteLine($"[DEBUG] Upload URL: {_httpClient.BaseAddress}api/message/upload");
+        Console.WriteLine($"[DEBUG] Number of files: {files.Count}");
+
+        var content = new MultipartFormDataContent();
+        var maxFileSize = int.Parse(_configuration["FileUploadSettings:MaxChatFileSizeBytes"] ?? "10485760");
+
+        foreach (var file in files)
+        {
+            // DIAGNOSTIC LOG: Check file ContentType
+            Console.WriteLine($"[DEBUG] Uploading file: {file.Name}");
+            Console.WriteLine($"[DEBUG] File ContentType: '{file.ContentType}'");
+            Console.WriteLine($"[DEBUG] ContentType is null: {file.ContentType == null}");
+            Console.WriteLine($"[DEBUG] ContentType is empty: {file.ContentType == string.Empty}");
+            
+            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: maxFileSize));
+            
+            // Handle empty or null ContentType by using a default MIME type
+            var contentType = string.IsNullOrEmpty(file.ContentType)
+                ? "application/octet-stream"
+                : file.ContentType;
+            
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            content.Add(fileContent, "files", file.Name);
+        }
+
+        content.Add(new StringContent(channelId.ToString()), "channelId");
+
+        Console.WriteLine($"[DEBUG] Sending POST request to api/message/upload");
+        var response = await _httpClient.PostAsync("api/message/upload", content);
+        Console.WriteLine($"[DEBUG] Response status: {response.StatusCode}");
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<List<AttachmentDto>>() ?? new List<AttachmentDto>();
+        }
+
+        return new List<AttachmentDto>();
+    }
+
+    public async Task<string> DownloadAttachmentAsync(int attachmentId)
+    {
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _httpClient.GetAsync($"api/message/attachment/{attachmentId}");
+        if (response.IsSuccessStatusCode)
+        {
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+            var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "download";
+
+            // Create download link
+            return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+
+        return null;
     }
 
     public async Task SendTypingIndicatorAsync(int channelId, bool isTyping)

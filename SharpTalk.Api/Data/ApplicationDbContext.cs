@@ -37,5 +37,12 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Reaction>()
             .HasIndex(r => new { r.MessageId, r.UserId, r.EmojiCode }).IsUnique();
+
+        // Attachment relationship
+        modelBuilder.Entity<Attachment>()
+            .HasOne(a => a.Message)
+            .WithMany(m => m.Attachments)
+            .HasForeignKey(a => a.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

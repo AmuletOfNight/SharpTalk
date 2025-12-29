@@ -137,7 +137,7 @@ public class ChatHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, channelId.ToString());
     }
 
-    public async Task SendMessage(int channelId, string content)
+    public async Task SendMessage(int channelId, string content, List<int> attachmentIds = null)
     {
         var userId = GetUserId();
         var username = GetUsername();
@@ -163,6 +163,33 @@ public class ChatHub : Hub
         _context.Messages.Add(message);
         await _context.SaveChangesAsync();
 
+        // Load attachments if provided
+        List<AttachmentDto> attachmentDtos = new List<AttachmentDto>();
+        if (attachmentIds != null && attachmentIds.Any())
+        {
+            var attachments = await _context.Attachments
+                .Where(a => attachmentIds.Contains(a.Id))
+                .ToListAsync();
+
+            // Update attachments with the message ID
+            foreach (var attachment in attachments)
+            {
+                attachment.MessageId = message.Id;
+            }
+            await _context.SaveChangesAsync();
+
+            attachmentDtos = attachments.Select(a => new AttachmentDto
+            {
+                Id = a.Id,
+                MessageId = a.MessageId,
+                FileName = a.FileName,
+                FileUrl = a.FileUrl,
+                FileType = a.FileType,
+                FileSize = a.FileSize,
+                CreatedAt = a.CreatedAt
+            }).ToList();
+        }
+
         var messageDto = new MessageDto
         {
             Id = message.Id,
@@ -171,7 +198,8 @@ public class ChatHub : Hub
             Username = username,
             AvatarUrl = avatarUrl,
             Content = content,
-            Timestamp = message.Timestamp
+            Timestamp = message.Timestamp,
+            Attachments = attachmentDtos
         };
 
         // Broadcast to the channel group
