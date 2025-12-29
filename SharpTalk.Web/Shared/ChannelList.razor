@@ -76,7 +76,7 @@
 </div>
 
 <CreateChannelModal @ref="CreateModal" WorkspaceId="@(Workspace?.Id ?? 0)" OnChannelCreated="OnChannelCreated" />
-<WorkspaceSettingsModal @ref="SettingsModal" Workspace="Workspace" IsOwner="IsOwner" />
+<WorkspaceSettingsModal @ref="SettingsModal" Workspace="Workspace" IsOwner="IsOwner" OnWorkspaceChanged="OnWorkspaceChanged" />
 
 @code {
     [Parameter]
@@ -178,6 +178,14 @@
     {
         Channels.Add(newChannel);
         await SelectChannel(newChannel.Id);
+    }
+
+    private async Task OnWorkspaceChanged()
+    {
+        // Reload workspace data when it changes (rename, ownership transfer, etc.)
+        await CheckOwnership();
+        await LoadMembers();
+        StateHasChanged();
     }
 
     public void Dispose()

@@ -1,6 +1,7 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
 @inject WorkspaceService WorkspaceService
+@inject NavigationManager Navigation
 
 @if (Show)
 {
@@ -12,68 +13,238 @@
                     <h5 class="modal-title">Workspace Settings - @Workspace?.Name</h5>
                     <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
                 </div>
-                <div class="modal-body p-0 d-flex" style="min-height: 400px;">
+                <div class="modal-body p-0 d-flex" style="min-height: 500px;">
                     @if (IsOwner)
                     {
                         <div class="settings-sidebar bg-dark p-3" style="width: 200px; border-right: 1px solid #2f3136;">
                             <ul class="nav flex-column nav-pills">
                                 <li class="nav-item">
                                     <button class="nav-link w-100 text-start @(ActiveTab == "General" ? "active" : "")"
-                                @onclick='() => ActiveTab = "General"'>General</button>
+                                @onclick='() => { ActiveTab = "General"; }'>General</button>
                                 </li>
                                 <li class="nav-item">
-                                    <button class="nav-link w-100 text-start @(ActiveTab == "Invite" ? "active" : "")"
-                                @onclick='() => ActiveTab = "Invite"'>Invite Users</button>
+                                    <button class="nav-link w-100 text-start @(ActiveTab == "Members" ? "active" : "")"
+                                @onclick='() => { ActiveTab = "Members"; LoadMembers(); }'>Members</button>
                                 </li>
                             </ul>
                         </div>
-                        <div class="settings-content p-4 flex-grow-1">
+                        <div class="settings-content p-4 flex-grow-1 overflow-auto">
                             @if (ActiveTab == "General")
                             {
                                 <h4>General Settings</h4>
+                                
+                                @if (!string.IsNullOrEmpty(Error))
+                                {
+                                    <div class="alert alert-danger mt-3">@Error</div>
+                                }
+                                @if (!string.IsNullOrEmpty(Success))
+                                {
+                                    <div class="alert alert-success mt-3">@Success</div>
+                                }
+
                                 <div class="mb-3 mt-4">
                                     <label class="form-label small text-uppercase fw-bold">Workspace Name</label>
                                     <div class="d-flex gap-2">
-                                        <input type="text" class="form-control" value="@Workspace?.Name" readonly />
-                                        <button class="btn btn-primary" disabled>Rename</button>
+                                        <input type="text" class="form-control" @bind="workspaceName" placeholder="Enter workspace name" />
+                                        <button class="btn btn-primary" @onclick="HandleRename" disabled="@IsRenaming">
+                                            @(IsRenaming ? "Renaming..." : "Rename")
+                                        </button>
                                     </div>
-                                    <small class="text-muted">Renaming will be available in the next update.</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label small text-uppercase fw-bold">Description</label>
+                                    <textarea class="form-control" @bind="workspaceDescription" rows="3" placeholder="Enter workspace description"></textarea>
+                                    <button class="btn btn-primary mt-2" @onclick="HandleUpdateDescription" disabled="@IsUpdatingDescription">
+                                        @(IsUpdatingDescription ? "Updating..." : "Update Description")
+                                    </button>
+                                </div>
+
+                                <div class="mt-4 p-3 rounded" style="background-color: #2f3136;">
+                                    <h6 class="fw-bold text-light">Statistics</h6>
+                                    <div class="row">
+                                        <div class="col-4">
+                                            <div class="text-center">
+                                                <div class="h4 mb-0 text-white">@Workspace?.MemberCount</div>
+                                                <small class="text-muted">Members</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="text-center">
+                                                <div class="h4 mb-0 text-white">@channelCount</div>
+                                                <small class="text-muted">Channels</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="text-center">
+                                                <div class="h4 mb-0 text-white">@Workspace?.CreatedAt.ToString("MMM dd, yyyy")</div>
+                                                <small class="text-muted">Created</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 p-3 rounded border border-danger" style="background-color: #2f3136;">
+                                    <h6 class="fw-bold text-danger">Danger Zone</h6>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-outline-warning" @onclick="OpenTransferOwnershipModal">
+                                            Transfer Ownership
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="OpenDeleteWorkspaceModal">
+                                            Delete Workspace
+                                        </button>
+                                    </div>
                                 </div>
                             }
-                            else if (ActiveTab == "Invite")
+                            else if (ActiveTab == "Members")
                             {
-                                <h4>Invite Users</h4>
-                                <p class="text-muted small">Invite your teammates to join this workspace by their username.</p>
+                                <h4>Members Management</h4>
+                                <p class="text-muted small">Manage workspace members and their roles.</p>
 
                                 @if (!string.IsNullOrEmpty(Error))
                                 {
                                     <div class="alert alert-danger mt-3">@Error</div>
                                 }
-                                @if (Success)
+                                @if (!string.IsNullOrEmpty(Success))
                                 {
-                                    <div class="alert alert-success mt-3">User invited successfully!</div>
+                                    <div class="alert alert-success mt-3">@Success</div>
                                 }
 
-                                <EditForm Model="inviteRequest" OnValidSubmit="HandleInvite">
-                                    <DataAnnotationsValidator />
-                                    <div class="mb-3 mt-4">
-                                        <label class="form-label small text-uppercase fw-bold">Username</label>
+                                <!-- Invite User Section -->
+                                <div class="card mb-4" style="background-color: #2f3136; border-color: #202225;">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold text-light mb-3">Invite New Member</h6>
                                         <div class="d-flex gap-2">
-                                            <InputText @bind-Value="inviteRequest.Username" class="form-control"
-                                    placeholder="Enter username" />
-                                            <button type="submit" class="btn btn-primary px-4">Invite</button>
+                                            <input type="text" class="form-control" @bind="inviteUsername" placeholder="Enter username to invite" />
+                                            <button class="btn btn-primary" @onclick="HandleInvite" disabled="@IsInviting">
+                                                @(IsInviting ? "Inviting..." : "Invite")
+                                            </button>
                                         </div>
-                                        <ValidationMessage For="@(() => inviteRequest.Username)" />
+                                        @if (!string.IsNullOrEmpty(InviteError))
+                                        {
+                                            <small class="text-danger">@InviteError</small>
+                                        }
                                     </div>
-                                </EditForm>
+                                </div>
+
+                                @if (isLoadingMembers)
+                                {
+                                    <div class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </div>
+                                }
+                                else if (Members.Any())
+                                {
+                                    <div class="list-group mt-3">
+                                        @foreach (var member in Members)
+                                        {
+                                            <div class="list-group-item d-flex justify-content-between align-items-center @(member.IsCurrentUser ? "bg-secondary" : "")" style="background-color: #2f3136; border-color: #202225;">
+                                                <div>
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="status-indicator @(member.IsOnline ? "online" : "offline") me-2"></span>
+                                                        <strong>@member.Username</strong>
+                                                        @if (member.IsCurrentUser)
+                                                        {
+                                                            <span class="badge bg-secondary ms-2">You</span>
+                                                        }
+                                                    </div>
+                                                    <small class="text-muted">
+                                                        @member.Role • Joined @member.JoinedAt.ToString("MMM dd, yyyy")
+                                                    </small>
+                                                </div>
+                                                @if (!member.IsCurrentUser)
+                                                {
+                                                    <div class="btn-group">
+                                                        @if (member.Role == "Member")
+                                                        {
+                                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => HandleMakeOwner(member.UserId)">
+                                                                Make Owner
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => HandleMakeMember(member.UserId)">
+                                                                Make Member
+                                                            </button>
+                                                        }
+                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => OpenRemoveMemberModal(member)">
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-center py-4 text-muted">
+                                        No members found.
+                                    </div>
+                                }
                             }
                         </div>
                     }
                     else
                     {
-                        <div class="p-4 flex-grow-1 text-center d-flex flex-column justify-content-center">
-                            <h4 class="text-danger">Access Denied</h4>
-                            <p>You do not have permission to access workspace settings.</p>
+                        <div class="p-4 flex-grow-1 overflow-auto">
+                            <h4>Workspace Members</h4>
+                            <p class="text-muted small">View all members of this workspace.</p>
+
+                            @if (!string.IsNullOrEmpty(Error))
+                            {
+                                <div class="alert alert-danger mt-3">@Error</div>
+                            }
+                            @if (!string.IsNullOrEmpty(Success))
+                            {
+                                <div class="alert alert-success mt-3">@Success</div>
+                            }
+
+                            @if (isLoadingMembers)
+                            {
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                            }
+                            else if (Members.Any())
+                            {
+                                <div class="list-group mt-3">
+                                    @foreach (var member in Members)
+                                    {
+                                        <div class="list-group-item d-flex justify-content-between align-items-center @(member.IsCurrentUser ? "bg-secondary" : "")" style="background-color: #2f3136; border-color: #202225;">
+                                            <div>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="status-indicator @(member.IsOnline ? "online" : "offline") me-2"></span>
+                                                    <strong>@member.Username</strong>
+                                                    @if (member.IsCurrentUser)
+                                                    {
+                                                        <span class="badge bg-secondary ms-2">You</span>
+                                                    }
+                                                </div>
+                                                <small class="text-muted">
+                                                    @member.Role • Joined @member.JoinedAt.ToString("MMM dd, yyyy")
+                                                </small>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="mt-4 pt-4 border-top">
+                                    <button class="btn btn-outline-danger" @onclick="OpenLeaveWorkspaceModal">
+                                        Leave Workspace
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-center py-4 text-muted">
+                                    No members found.
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -85,22 +256,177 @@
     </div>
 }
 
+<!-- Remove Member Confirmation Modal -->
+@if (ShowRemoveMemberModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Remove Member</h5>
+                    <button type="button" class="btn-close" @onclick="CloseRemoveMemberModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to remove <strong>@memberToRemove?.Username</strong> from this workspace?</p>
+                    <p class="text-muted small">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseRemoveMemberModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleRemoveMember" disabled="@IsRemovingMember">
+                        @(IsRemovingMember ? "Removing..." : "Remove")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Transfer Ownership Modal -->
+@if (ShowTransferOwnershipModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Transfer Ownership</h5>
+                    <button type="button" class="btn-close" @onclick="CloseTransferOwnershipModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Select a member to transfer ownership to:</p>
+                    @if (Members.Any(m => !m.IsCurrentUser))
+                    {
+                        <select class="form-select" @bind="newOwnerId">
+                            @foreach (var member in Members.Where(m => !m.IsCurrentUser))
+                            {
+                                <option value="@member.UserId">@member.Username (@member.Role)</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No other members available to transfer ownership to.</p>
+                    }
+                    <p class="text-danger small mt-3">
+                        Warning: After transferring ownership, you will become a regular member and will lose owner privileges.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseTransferOwnershipModal">Cancel</button>
+                    <button type="button" class="btn btn-warning" @onclick="HandleTransferOwnership" disabled="@(!CanTransferOwnership)">
+                        @(IsTransferringOwnership ? "Transferring..." : "Transfer Ownership")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Workspace Modal -->
+@if (ShowDeleteWorkspaceModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Workspace</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDeleteWorkspaceModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong>@Workspace?.Name</strong>?</p>
+                    <p class="text-danger">This action cannot be undone. All channels, messages, and members will be permanently deleted.</p>
+                    <div class="mt-3">
+                        <label class="form-label">Type <strong>@Workspace?.Name</strong> to confirm:</label>
+                        <input type="text" class="form-control" @bind="deleteConfirmation" placeholder="Enter workspace name" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteWorkspaceModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleDeleteWorkspace" disabled="@IsDeletingWorkspace || deleteConfirmation != Workspace?.Name">
+                        @(IsDeletingWorkspace ? "Deleting..." : "Delete Workspace")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Leave Workspace Modal -->
+@if (ShowLeaveWorkspaceModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Leave Workspace</h5>
+                    <button type="button" class="btn-close" @onclick="CloseLeaveWorkspaceModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to leave <strong>@Workspace?.Name</strong>?</p>
+                    <p class="text-muted small">You will lose access to all channels and messages in this workspace.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseLeaveWorkspaceModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleLeaveWorkspace" disabled="@IsLeavingWorkspace">
+                        @(IsLeavingWorkspace ? "Leaving..." : "Leave Workspace")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public WorkspaceDto? Workspace { get; set; }
     [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public EventCallback OnWorkspaceChanged { get; set; }
 
     public bool Show { get; private set; }
-    private string ActiveTab = "Invite"; // Default to Invite as per user request
-    private InviteUserRequest inviteRequest = new InviteUserRequest();
+    private string ActiveTab = "General";
     private string Error = "";
-    private bool Success = false;
+    private string Success = "";
+    private string workspaceName = "";
+    private string workspaceDescription = "";
+    private string inviteUsername = "";
+    private string InviteError = "";
+    private int channelCount = 0;
+    private List<WorkspaceMemberDto> Members = new List<WorkspaceMemberDto>();
+    private bool isLoadingMembers = false;
+    private bool IsRenaming = false;
+    private bool IsUpdatingDescription = false;
+    private bool IsInviting = false;
+
+    // Remove member modal
+    private bool ShowRemoveMemberModal = false;
+    private WorkspaceMemberDto? memberToRemove;
+    private bool IsRemovingMember = false;
+
+    // Transfer ownership modal
+    private bool ShowTransferOwnershipModal = false;
+    private int newOwnerId = 0;
+    private bool IsTransferringOwnership = false;
+    private bool CanTransferOwnership => !IsTransferringOwnership && Members.Any(m => !m.IsCurrentUser);
+
+    // Delete workspace modal
+    private bool ShowDeleteWorkspaceModal = false;
+    private string deleteConfirmation = "";
+    private bool IsDeletingWorkspace = false;
+
+    // Leave workspace modal
+    private bool ShowLeaveWorkspaceModal = false;
+    private bool IsLeavingWorkspace = false;
 
     public void Open()
     {
         Show = true;
-        inviteRequest = new InviteUserRequest { WorkspaceId = Workspace?.Id ?? 0 };
+        workspaceName = Workspace?.Name ?? "";
+        workspaceDescription = Workspace?.Description ?? "";
         Error = "";
-        Success = false;
+        Success = "";
+        ActiveTab = "General";
         StateHasChanged();
     }
 
@@ -110,21 +436,390 @@
         StateHasChanged();
     }
 
+    private async Task LoadMembers()
+    {
+        if (Workspace == null) return;
+
+        isLoadingMembers = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            Members = await WorkspaceService.GetWorkspaceMembersDetailedAsync(Workspace.Id);
+        }
+        catch (Exception ex)
+        {
+            Error = $"Failed to load members: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingMembers = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleRename()
+    {
+        if (Workspace == null || string.IsNullOrWhiteSpace(workspaceName)) return;
+
+        IsRenaming = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.RenameWorkspaceAsync(Workspace.Id, workspaceName);
+            if (success)
+            {
+                Success = "Workspace renamed successfully!";
+                Workspace.Name = workspaceName;
+                await OnWorkspaceChanged.InvokeAsync();
+            }
+            else
+            {
+                Error = "Failed to rename workspace.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error renaming workspace: {ex.Message}";
+        }
+        finally
+        {
+            IsRenaming = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleUpdateDescription()
+    {
+        if (Workspace == null) return;
+
+        IsUpdatingDescription = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.UpdateWorkspaceDescriptionAsync(Workspace.Id, workspaceDescription);
+            if (success)
+            {
+                Success = "Description updated successfully!";
+                Workspace.Description = workspaceDescription;
+            }
+            else
+            {
+                Error = "Failed to update description.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error updating description: {ex.Message}";
+        }
+        finally
+        {
+            IsUpdatingDescription = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task HandleInvite()
     {
-        Error = "";
-        Success = false;
-        inviteRequest.WorkspaceId = Workspace?.Id ?? 0;
+        if (string.IsNullOrWhiteSpace(inviteUsername)) return;
 
-        var success = await WorkspaceService.InviteUserAsync(inviteRequest);
-        if (success)
+        Error = "";
+        Success = "";
+        InviteError = "";
+        IsInviting = true;
+        StateHasChanged();
+
+        try
         {
-            Success = true;
-            inviteRequest.Username = "";
+            var request = new InviteUserRequest { WorkspaceId = Workspace?.Id ?? 0, Username = inviteUsername };
+            var success = await WorkspaceService.InviteUserAsync(request);
+            if (success)
+            {
+                Success = "User invited successfully!";
+                inviteUsername = "";
+                Workspace!.MemberCount++;
+                await LoadMembers();
+            }
+            else
+            {
+                InviteError = "Failed to invite user. Check if username exists or if they are already a member.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Error = "Failed to invite user. Check if username exists or if they are already a member.";
+            InviteError = $"Error inviting user: {ex.Message}";
+        }
+        finally
+        {
+            IsInviting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleMakeOwner(int userId)
+    {
+        if (Workspace == null) return;
+
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.UpdateMemberRoleAsync(Workspace.Id, userId, "Owner");
+            if (success)
+            {
+                Success = "Member promoted to owner successfully!";
+                await LoadMembers();
+            }
+            else
+            {
+                Error = "Failed to promote member to owner.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error promoting member: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleMakeMember(int userId)
+    {
+        if (Workspace == null) return;
+
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.UpdateMemberRoleAsync(Workspace.Id, userId, "Member");
+            if (success)
+            {
+                Success = "Owner demoted to member successfully!";
+                await LoadMembers();
+            }
+            else
+            {
+                Error = "Failed to demote owner to member.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error demoting owner: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private void OpenRemoveMemberModal(WorkspaceMemberDto member)
+    {
+        memberToRemove = member;
+        ShowRemoveMemberModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseRemoveMemberModal()
+    {
+        ShowRemoveMemberModal = false;
+        memberToRemove = null;
+        StateHasChanged();
+    }
+
+    private async Task HandleRemoveMember()
+    {
+        if (Workspace == null || memberToRemove == null) return;
+
+        IsRemovingMember = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.RemoveMemberAsync(Workspace.Id, memberToRemove.UserId);
+            if (success)
+            {
+                Success = $"{memberToRemove.Username} removed from workspace successfully!";
+                Workspace.MemberCount--;
+                await LoadMembers();
+                CloseRemoveMemberModal();
+            }
+            else
+            {
+                Error = "Failed to remove member from workspace.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error removing member: {ex.Message}";
+        }
+        finally
+        {
+            IsRemovingMember = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenTransferOwnershipModal()
+    {
+        if (!Members.Any())
+        {
+            await LoadMembers();
+        }
+
+        newOwnerId = 0;
+        ShowTransferOwnershipModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseTransferOwnershipModal()
+    {
+        ShowTransferOwnershipModal = false;
+        newOwnerId = 0;
+        StateHasChanged();
+    }
+
+    private async Task HandleTransferOwnership()
+    {
+        if (Workspace == null || newOwnerId == 0) return;
+
+        IsTransferringOwnership = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.TransferOwnershipAsync(Workspace.Id, newOwnerId);
+            if (success)
+            {
+                Success = "Ownership transferred successfully!";
+                await LoadMembers();
+                CloseTransferOwnershipModal();
+                await OnWorkspaceChanged.InvokeAsync();
+            }
+            else
+            {
+                Error = "Failed to transfer ownership.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error transferring ownership: {ex.Message}";
+        }
+        finally
+        {
+            IsTransferringOwnership = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenDeleteWorkspaceModal()
+    {
+        deleteConfirmation = "";
+        ShowDeleteWorkspaceModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseDeleteWorkspaceModal()
+    {
+        ShowDeleteWorkspaceModal = false;
+        deleteConfirmation = "";
+        StateHasChanged();
+    }
+
+    private async Task HandleDeleteWorkspace()
+    {
+        if (Workspace == null || deleteConfirmation != Workspace.Name) return;
+
+        IsDeletingWorkspace = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.DeleteWorkspaceAsync(Workspace.Id);
+            if (success)
+            {
+                Close();
+                CloseDeleteWorkspaceModal();
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                Error = "Failed to delete workspace.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error deleting workspace: {ex.Message}";
+        }
+        finally
+        {
+            IsDeletingWorkspace = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenLeaveWorkspaceModal()
+    {
+        ShowLeaveWorkspaceModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseLeaveWorkspaceModal()
+    {
+        ShowLeaveWorkspaceModal = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleLeaveWorkspace()
+    {
+        if (Workspace == null) return;
+
+        IsLeavingWorkspace = true;
+        Error = "";
+        Success = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await WorkspaceService.LeaveWorkspaceAsync(Workspace.Id);
+            if (success)
+            {
+                Close();
+                CloseLeaveWorkspaceModal();
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                Error = "Failed to leave workspace.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error leaving workspace: {ex.Message}";
+        }
+        finally
+        {
+            IsLeavingWorkspace = false;
+            StateHasChanged();
         }
     }
 }

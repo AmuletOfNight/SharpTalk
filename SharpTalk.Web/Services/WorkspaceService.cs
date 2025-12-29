@@ -55,4 +55,63 @@ public class WorkspaceService
         await SetAuthHeader();
         return await _httpClient.GetFromJsonAsync<List<UserStatusDto>>($"api/workspace/{workspaceId}/members") ?? new List<UserStatusDto>();
     }
+
+    public async Task<List<WorkspaceMemberDto>> GetWorkspaceMembersDetailedAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<WorkspaceMemberDto>>($"api/workspace/{workspaceId}/members-detailed") ?? new List<WorkspaceMemberDto>();
+    }
+
+    public async Task<bool> RenameWorkspaceAsync(int workspaceId, string newName)
+    {
+        await SetAuthHeader();
+        var request = new RenameWorkspaceRequest { WorkspaceId = workspaceId, NewName = newName };
+        var response = await _httpClient.PutAsJsonAsync($"api/workspace/{workspaceId}/rename", request);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> UpdateWorkspaceDescriptionAsync(int workspaceId, string description)
+    {
+        await SetAuthHeader();
+        var request = new UpdateWorkspaceDescriptionRequest { WorkspaceId = workspaceId, Description = description };
+        var response = await _httpClient.PutAsJsonAsync($"api/workspace/{workspaceId}/description", request);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> RemoveMemberAsync(int workspaceId, int userId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/workspace/{workspaceId}/members/{userId}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> LeaveWorkspaceAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/workspace/{workspaceId}/leave");
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> DeleteWorkspaceAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/workspace/{workspaceId}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> TransferOwnershipAsync(int workspaceId, int newOwnerId)
+    {
+        await SetAuthHeader();
+        var request = new TransferOwnershipRequest { WorkspaceId = workspaceId, NewOwnerId = newOwnerId };
+        var response = await _httpClient.PostAsJsonAsync($"api/workspace/{workspaceId}/transfer-ownership", request);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> UpdateMemberRoleAsync(int workspaceId, int userId, string newRole)
+    {
+        await SetAuthHeader();
+        var request = new UpdateMemberRoleRequest { WorkspaceId = workspaceId, UserId = userId, NewRole = newRole };
+        var response = await _httpClient.PutAsJsonAsync($"api/workspace/{workspaceId}/members/{userId}/role", request);
+        return response.IsSuccessStatusCode;
+    }
 }

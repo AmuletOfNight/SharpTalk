@@ -35,8 +35,10 @@ public class WorkspaceController : ControllerBase
             {
                 Id = wm.Workspace.Id,
                 Name = wm.Workspace.Name,
+                Description = wm.Workspace.Description,
                 OwnerId = wm.Workspace.OwnerId,
-                MemberCount = wm.Workspace.Members.Count
+                MemberCount = wm.Workspace.Members.Count,
+                CreatedAt = wm.Workspace.CreatedAt
             })
             .ToListAsync();
 
@@ -81,8 +83,10 @@ public class WorkspaceController : ControllerBase
         {
             Id = workspace.Id,
             Name = workspace.Name,
+            Description = workspace.Description,
             OwnerId = workspace.OwnerId,
-            MemberCount = 1
+            MemberCount = 1,
+            CreatedAt = workspace.CreatedAt
         });
     }
     [HttpPost("invite")]
@@ -153,5 +157,231 @@ public class WorkspaceController : ControllerBase
         }
 
         return Ok(members);
+    }
+
+    [HttpGet("{workspaceId}/members-detailed")]
+    public async Task<ActionResult<List<WorkspaceMemberDto>>> GetWorkspaceMembersDetailed(int workspaceId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var isMember = await _context.WorkspaceMembers
+            .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+
+        if (!isMember) return Forbid();
+
+        var members = await _context.WorkspaceMembers
+            .Where(wm => wm.WorkspaceId == workspaceId)
+            .Include(wm => wm.User)
+            .Select(wm => new WorkspaceMemberDto
+            {
+                Id = wm.Id,
+                UserId = wm.UserId,
+                Username = wm.User.Username,
+                Role = wm.Role,
+                JoinedAt = wm.JoinedAt,
+                IsOnline = false // Will be updated from Redis
+            })
+            .ToListAsync();
+
+        var db = _redis.GetDatabase();
+        var onlineUsers = await db.SetMembersAsync("online_users");
+        var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
+
+        foreach (var member in members)
+        {
+            member.IsOnline = onlineUserIds.Contains(member.UserId);
+            member.IsCurrentUser = member.UserId == userId;
+        }
+
+        return Ok(members);
+    }
+
+    [HttpPut("{workspaceId}/rename")]
+    public async Task<IActionResult> RenameWorkspace(int workspaceId, RenameWorkspaceRequest request)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != userId)
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewName))
+        {
+            return BadRequest("Workspace name cannot be empty");
+        }
+
+        workspace.Name = request.NewName;
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpPut("{workspaceId}/description")]
+    public async Task<IActionResult> UpdateDescription(int workspaceId, UpdateWorkspaceDescriptionRequest request)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != userId)
+        {
+            return Forbid();
+        }
+
+        workspace.Description = request.Description;
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpDelete("{workspaceId}/members/{userId}")]
+    public async Task<IActionResult> RemoveMember(int workspaceId, int userId)
+    {
+        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != currentUserId)
+        {
+            return Forbid();
+        }
+
+        if (userId == currentUserId)
+        {
+            return BadRequest("Cannot remove yourself from workspace. Transfer ownership first.");
+        }
+
+        var member = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+
+        if (member == null) return NotFound("Member not found");
+
+        _context.WorkspaceMembers.Remove(member);
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpDelete("{workspaceId}/leave")]
+    public async Task<IActionResult> LeaveWorkspace(int workspaceId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId == userId)
+        {
+            return BadRequest("Cannot leave workspace as owner. Transfer ownership first.");
+        }
+
+        var member = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+
+        if (member == null) return NotFound("Member not found");
+
+        _context.WorkspaceMembers.Remove(member);
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpDelete("{workspaceId}")]
+    public async Task<IActionResult> DeleteWorkspace(int workspaceId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != userId)
+        {
+            return Forbid();
+        }
+
+        _context.Workspaces.Remove(workspace);
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpPost("{workspaceId}/transfer-ownership")]
+    public async Task<IActionResult> TransferOwnership(int workspaceId, TransferOwnershipRequest request)
+    {
+        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != currentUserId)
+        {
+            return Forbid();
+        }
+
+        if (request.NewOwnerId == currentUserId)
+        {
+            return BadRequest("Cannot transfer ownership to yourself");
+        }
+
+        var newOwnerMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == request.NewOwnerId);
+
+        if (newOwnerMember == null) return NotFound("New owner is not a member of this workspace");
+
+        var currentOwnerMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == currentUserId);
+
+        if (currentOwnerMember == null) return NotFound("Current owner member not found");
+
+        // Update workspace owner
+        workspace.OwnerId = request.NewOwnerId;
+
+        // Update roles
+        newOwnerMember.Role = "Owner";
+        currentOwnerMember.Role = "Member";
+
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpPut("{workspaceId}/members/{userId}/role")]
+    public async Task<IActionResult> UpdateMemberRole(int workspaceId, int userId, UpdateMemberRoleRequest request)
+    {
+        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != currentUserId)
+        {
+            return Forbid();
+        }
+
+        if (userId == currentUserId)
+        {
+            return BadRequest("Cannot change your own role");
+        }
+
+        var member = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+
+        if (member == null) return NotFound("Member not found");
+
+        if (request.NewRole != "Owner" && request.NewRole != "Member")
+        {
+            return BadRequest("Invalid role. Must be 'Owner' or 'Member'");
+        }
+
+        member.Role = request.NewRole;
+        await _context.SaveChangesAsync();
+
+        return Ok();
     }
 }
