@@ -1,13 +1,12 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
 @inject WorkspaceService WorkspaceService
-@inject NavigationManager Navigation
 
 <div class="sidebar">
     <div class="workspace-list">
-        @if (Workspaces == null || !Workspaces.Any() && isLoading)
+        @if (Workspaces == null)
         {
-            @for (int i = 0; i < 5; i++)
+             @for (int i = 0; i < 5; i++)
             {
                 <div class="skeleton skeleton-icon"></div>
             }
@@ -16,15 +15,33 @@
         {
             @foreach (var workspace in Workspaces)
             {
-                <div class="workspace-item @(selectedWorkspaceId == workspace.Id ? "active" : "")" title="@workspace.Name"
-            @onclick="() => SelectWorkspace(workspace.Id)">
+                <div class="workspace-item @(ActiveWorkspaceId == workspace.Id ? "active" : "")" 
+                     title="@workspace.Name"
+                     draggable="true"
+                     @ondragstart="() => HandleDragStart(workspace)"
+                     @ondrop="() => HandleDrop(workspace)"
+                     @ondragover="HandleDragOver"
+                     @ondragover:preventDefault
+                     @onclick="() => SelectWorkspace(workspace.Id)">
                     <span class="workspace-icon">@workspace.Name.Substring(0, 1).ToUpper()</span>
                 </div>
             }
+            
+            <div class="workspace-item home-item @(ActiveWorkspaceId == -1 ? "active" : "")" 
+                 title="Home"
+                 @onclick="() => SelectWorkspace(-1)">
+                <span class="workspace-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                </span>
+            </div>
+
+            <div class="workspace-item add-workspace" @onclick="OpenCreateModal">
+                <span class="workspace-icon">+</span>
+            </div>
         }
-        <div class="workspace-item add-workspace" @onclick="OpenCreateModal">
-            <span class="workspace-icon">+</span>
-        </div>
     </div>
 </div>
 
@@ -32,45 +49,26 @@
 
 @code {
     [Parameter]
-    public EventCallback<WorkspaceDto> OnWorkspaceSelected { get; set; }
+    public List<WorkspaceDto>? Workspaces { get; set; }
 
-    private List<WorkspaceDto> Workspaces = new List<WorkspaceDto>();
+    [Parameter]
+    public int ActiveWorkspaceId { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnWorkspaceSelected { get; set; }
+    
+    [Parameter]
+    public EventCallback<List<WorkspaceDto>> OnWorkspacesReordered { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkspaceDto> OnWorkspaceCreatedCallback { get; set; }
+
     private CreateWorkspaceModal? CreateModal;
-    private int selectedWorkspaceId;
-    private bool isLoading = true;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadWorkspaces();
-    }
-
-    private async Task LoadWorkspaces()
-    {
-        try
-        {
-            isLoading = true;
-            Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
-            isLoading = false;
-            if (Workspaces.Any())
-            {
-                await SelectWorkspace(Workspaces.First().Id);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading workspaces: {ex.Message}");
-            isLoading = false;
-        }
-    }
+    private WorkspaceDto? dragedItem;
 
     private async Task SelectWorkspace(int id)
     {
-        selectedWorkspaceId = id;
-        var workspace = Workspaces.FirstOrDefault(w => w.Id == id);
-        if (workspace != null)
-        {
-            await OnWorkspaceSelected.InvokeAsync(workspace);
-        }
+        await OnWorkspaceSelected.InvokeAsync(id);
     }
 
     private void OpenCreateModal()
@@ -80,7 +78,35 @@
 
     private async Task OnWorkspaceCreated(WorkspaceDto newWorkspace)
     {
-        Workspaces.Add(newWorkspace);
-        await SelectWorkspace(newWorkspace.Id);
+        await OnWorkspaceCreatedCallback.InvokeAsync(newWorkspace);
+    }
+    
+    private void HandleDragStart(WorkspaceDto item)
+    {
+        dragedItem = item;
+    }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        // allow drop
+        e.DataTransfer.DropEffect = "move";
+    }
+
+    private async Task HandleDrop(WorkspaceDto targetItem)
+    {
+        if (dragedItem == null || Workspaces == null) return;
+        
+        var oldIndex = Workspaces.IndexOf(dragedItem);
+        var newIndex = Workspaces.IndexOf(targetItem);
+        
+        if (oldIndex == -1 || newIndex == -1) return;
+        
+        // Swap or move?
+        Workspaces.RemoveAt(oldIndex);
+        Workspaces.Insert(newIndex, dragedItem);
+        
+        dragedItem = null;
+        
+        await OnWorkspacesReordered.InvokeAsync(Workspaces);
     }
 }

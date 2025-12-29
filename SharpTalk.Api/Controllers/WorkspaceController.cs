@@ -23,6 +23,28 @@ public class WorkspaceController : ControllerBase
         _redis = redis;
     }
 
+    [HttpPost("reorder")]
+    public async Task<IActionResult> ReorderWorkspaces([FromBody] List<int> workspaceIds)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var members = await _context.WorkspaceMembers
+            .Where(wm => wm.UserId == userId)
+            .ToListAsync();
+
+        foreach (var member in members)
+        {
+            var index = workspaceIds.IndexOf(member.WorkspaceId);
+            if (index != -1)
+            {
+                member.OrderIndex = index;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok();
+    }
+
     [HttpGet]
     public async Task<ActionResult<List<WorkspaceDto>>> GetMyWorkspaces()
     {
@@ -38,8 +60,10 @@ public class WorkspaceController : ControllerBase
                 Description = wm.Workspace.Description,
                 OwnerId = wm.Workspace.OwnerId,
                 MemberCount = wm.Workspace.Members.Count,
+                OrderIndex = wm.OrderIndex,
                 CreatedAt = wm.Workspace.CreatedAt
             })
+            .OrderBy(w => w.OrderIndex)
             .ToListAsync();
 
         return Ok(workspaces);

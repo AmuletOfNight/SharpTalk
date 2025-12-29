@@ -22,6 +22,13 @@ public class WorkspaceService
         return await _httpClient.GetFromJsonAsync<List<WorkspaceDto>>("api/workspace") ?? new List<WorkspaceDto>();
     }
 
+    public async Task<bool> ReorderWorkspacesAsync(List<int> workspaceIds)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsJsonAsync("api/workspace/reorder", workspaceIds);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<WorkspaceDto?> CreateWorkspaceAsync(CreateWorkspaceRequest request)
     {
         await SetAuthHeader();
@@ -54,6 +61,12 @@ public class WorkspaceService
     {
         await SetAuthHeader();
         return await _httpClient.GetFromJsonAsync<List<UserStatusDto>>($"api/workspace/{workspaceId}/members") ?? new List<UserStatusDto>();
+    }
+
+    public async Task<List<ChannelDto>> GetWorkspaceChannelsAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<ChannelDto>>($"api/channel/{workspaceId}") ?? new List<ChannelDto>();
     }
 
     public async Task<List<WorkspaceMemberDto>> GetWorkspaceMembersDetailedAsync(int workspaceId)

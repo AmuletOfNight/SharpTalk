@@ -7,5 +7,6 @@ public class WorkspaceDto
     public string? Description { get; set; }
     public int OwnerId { get; set; }
     public int MemberCount { get; set; }
+    public int OrderIndex { get; set; }
     public DateTime CreatedAt { get; set; }
 }

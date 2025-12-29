@@ -89,6 +89,20 @@
                             </button>
                         </div>
                     </div>
+
+                    <div class="form-group">
+                        <label>Preferences</label>
+                        <div class="d-flex flex-column gap-2 mt-2">
+                             <div class="form-check">
+                                <input type="checkbox" id="chkStartOnHome" class="form-check-input" @bind="startOnHome" />
+                                <label for="chkStartOnHome" class="form-check-label text-white">Start on Home View</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" id="chkAutoOpen" class="form-check-input" @bind="autoOpenChannel" />
+                                <label for="chkAutoOpen" class="form-check-label text-white">Automatically open last visited channel</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -131,6 +145,8 @@
     private IBrowserFile? selectedFile;
     private string? croppedBase64;
     private string cropperImageId = $"cropper-{Guid.NewGuid():N}";
+    private bool startOnHome;
+    private bool autoOpenChannel;
 
     public void Open()
     {
@@ -177,6 +193,8 @@
             username = CurrentUser.Username;
             email = CurrentUser.Email;
             selectedStatus = CurrentUser.Status;
+            startOnHome = CurrentUser.StartOnHome;
+            autoOpenChannel = CurrentUser.AutoOpenLastChannel;
         }
         StateHasChanged();
     }
@@ -244,7 +262,9 @@
             Username = CurrentUser.Username,
             Email = CurrentUser.Email,
             AvatarUrl = UserService.CurrentUser?.AvatarUrl ?? CurrentUser.AvatarUrl,
-            Status = selectedStatus
+            Status = selectedStatus,
+            StartOnHome = startOnHome,
+            AutoOpenLastChannel = autoOpenChannel
         };
 
         var success = await UserService.UpdateUserInfoAsync(updatedUser);

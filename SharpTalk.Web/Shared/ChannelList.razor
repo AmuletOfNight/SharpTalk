@@ -88,6 +88,9 @@
     public WorkspaceDto? Workspace { get; set; }
 
     [Parameter]
+    public int ActiveChannelId { get; set; }
+
+    [Parameter]
     public EventCallback<ChannelDto> OnChannelSelected { get; set; }
 
     private List<ChannelDto> Channels = new List<ChannelDto>();
@@ -107,26 +110,53 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Workspace != null && Workspace.Id != _lastWorkspaceId)
+        if (Workspace != null)
         {
-            isLoading = true;
-            _lastWorkspaceId = Workspace.Id;
-            await ChatService.JoinWorkspaceAsync(Workspace.Id);
-            await CheckOwnership();
-            await LoadChannels();
-            await LoadMembers();
-            
-            // Auto-select the first channel if available
-            if (Channels.Any())
+            // If workspace changed, reload everything
+            if (Workspace.Id != _lastWorkspaceId)
             {
-                await SelectChannel(Channels.First());
+                isLoading = true;
+                _lastWorkspaceId = Workspace.Id;
+                await ChatService.JoinWorkspaceAsync(Workspace.Id);
+                await CheckOwnership();
+                await LoadChannels();
+                await LoadMembers();
+                
+                // Select channel logic:
+                // 1. If ActiveChannelId is valid for this workspace, use it.
+                // 2. Else if we have channels, default to first.
+                // 3. Else none.
+                
+                ChannelDto? targetChannel = null;
+                
+                if (ActiveChannelId > 0)
+                {
+                    targetChannel = Channels.FirstOrDefault(c => c.Id == ActiveChannelId);
+                }
+                
+                if (targetChannel == null && Channels.Any())
+                {
+                    targetChannel = Channels.First();
+                }
+                
+                if (targetChannel != null)
+                {
+                    await SelectChannel(targetChannel);
+                }
+                else
+                {
+                    selectedChannelId = 0;
+                }
+                
+                isLoading = false;
             }
-            else
+            else if (ActiveChannelId != selectedChannelId && ActiveChannelId > 0)
             {
-                selectedChannelId = 0;
+                // If just switching channels via parent (e.g. from somewhere else not sidebar?), sync UI
+                // But usually ChannelList drives the parent. 
+                // However if we want to support external navigation, we update here.
+                selectedChannelId = ActiveChannelId;
             }
-            
-            isLoading = false;
         }
     }
 

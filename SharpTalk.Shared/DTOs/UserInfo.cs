@@ -7,4 +7,6 @@ public class UserInfo
     public string Email { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public string Status { get; set; } = "Online";
+    public bool StartOnHome { get; set; }
+    public bool AutoOpenLastChannel { get; set; }
 }

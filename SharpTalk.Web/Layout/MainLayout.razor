@@ -20,7 +20,11 @@
                 }
                 else
                 {
-                    <Sidebar OnWorkspaceSelected="HandleWorkspaceSelected" />
+                    <Sidebar Workspaces="Workspaces" 
+                             ActiveWorkspaceId="ActiveWorkspaceId"
+                             OnWorkspaceSelected="HandleWorkspaceSelected" 
+                             OnWorkspacesReordered="HandleWorkspacesReordered"
+                             OnWorkspaceCreatedCallback="HandleWorkspaceCreated" />
                 }
             </div>
         </div>
@@ -44,7 +48,9 @@
         else if (CurrentWorkspace != null)
         {
             <div class="channel-sidebar">
-                <ChannelList Workspace="CurrentWorkspace" OnChannelSelected="HandleChannelSelected" />
+                <ChannelList Workspace="CurrentWorkspace" 
+                             ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
+                             OnChannelSelected="HandleChannelSelected" />
             </div>
         }
 
@@ -84,12 +90,17 @@
 
 @inject ChatService ChatService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject WorkspaceService WorkspaceService
+@inject UserService UserService
 
 @code {
+    private List<WorkspaceDto>? Workspaces;
     private WorkspaceDto? CurrentWorkspace;
     private ChannelDto? CurrentChannel;
     private bool IsLoading = true;
     private bool IsAuthenticated = false;
+    private int ActiveWorkspaceId = -1;
 
     protected override async Task OnInitializedAsync()
     {
@@ -122,6 +133,46 @@
         if (IsAuthenticated)
         {
             await ChatService.InitializeAsync();
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try 
+        {
+            Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
+            var user = await UserService.GetCurrentUserAsync();
+            
+            if (user != null && user.StartOnHome)
+            {
+                // Start on Home logic
+                await HandleWorkspaceSelected(-1);
+            }
+            else
+            {
+                // Retrieve last state
+                var lastWorkspaceId = await LocalStorage.GetItemAsync<int?>("lastWorkspaceId");
+                
+                if (lastWorkspaceId.HasValue && Workspaces.Any(w => w.Id == lastWorkspaceId.Value))
+                {
+                    await HandleWorkspaceSelected(lastWorkspaceId.Value);
+                }
+                else if (Workspaces.Any())
+                {
+                    // Default to first if no history or history invalid
+                    await HandleWorkspaceSelected(Workspaces.First().Id);
+                }
+                else 
+                {
+                     // No workspaces, go home
+                     await HandleWorkspaceSelected(-1);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+             Console.WriteLine($"Error loading data: {ex.Message}");
         }
     }
 
@@ -130,16 +181,102 @@
         AuthStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
     }
 
-    private void HandleWorkspaceSelected(WorkspaceDto workspace)
+    private async Task HandleWorkspaceSelected(int workspaceId)
     {
-        CurrentWorkspace = workspace;
-        CurrentChannel = null; // Reset channel when workspace changes
+        ActiveWorkspaceId = workspaceId;
+        
+        if (workspaceId == -1)
+        {
+            CurrentWorkspace = null;
+            CurrentChannel = null;
+            await LocalStorage.RemoveItemAsync("lastWorkspaceId");
+        }
+        else
+        {
+             CurrentWorkspace = Workspaces?.FirstOrDefault(w => w.Id == workspaceId);
+             if (CurrentWorkspace != null)
+             {
+                 await LocalStorage.SetItemAsync("lastWorkspaceId", workspaceId);
+                 
+                 // Handle AutoOpenLastChannel
+                 var user = UserService.CurrentUser;
+                 if (user != null && user.AutoOpenLastChannel)
+                 {
+                     var lastChannelId = await LocalStorage.GetItemAsync<int?>($"workspace_{workspaceId}_lastChannel");
+                     // We need to verify this channel exists in the workspace.
+                     // But we don't have the channel list here yet. ChannelList component fetches it.
+                     // Actually, we can fetch channels to verify, or pass this "Suggestion" to ChannelList?
+                     // Or just set CurrentChannel based on ID and let UI handle if it fails (lazy load).
+                     // Better: We should probably fetch channels here if we want to determine initial channel.
+                     // OR, simply: Don't set CurrentChannel yet. Let ChannelList component handle "Auto Select Last" if specific logic is preferred.
+                     // But "ChannelList" is only rendered IF CurrentWorkspace is not null.
+                     // If we want to "Drop user into last channel", we need `CurrentChannel` to be non-null.
+                     
+                     // Let's try to fetch channel list for the workspace to be safe.
+                     if (lastChannelId.HasValue)
+                     {
+                         // Optimization: Just assume it's valid? No, might have been deleted.
+                         // Let's fetch.
+                         var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
+                         var channel = channels.FirstOrDefault(c => c.Id == lastChannelId.Value);
+                         if (channel != null)
+                         {
+                             CurrentChannel = channel;
+                         }
+                         else 
+                         {
+                             // Default to general? Or null (show channel list)
+                             // User: "or have to have the user click on a channel"
+                             // If auto-open is ON, we should probably default to 'general' if last not found.
+                             var general = channels.FirstOrDefault(c => c.Name == "general");
+                             CurrentChannel = general;
+                         }
+                     }
+                     else
+                     {
+                         // No last channel, check if we should auto-open general?
+                         // "drop into the last channel they were in"
+                         // implies history. If no history, maybe just list?
+                         // Let's default to General for new workspaces if preference is ON.
+                         var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
+                         CurrentChannel = channels.FirstOrDefault(c => c.Name == "general");
+                     }
+                 }
+                 else
+                 {
+                     CurrentChannel = null;
+                 }
+             }
+        }
+        
         StateHasChanged();
     }
+    
+    // Note: workspace logic is async now so method signature changed from void to Task
+    // But modifying the callback from sidebar `EventCallback<int>` expects `Task` or `void`.
+    // Sidebar calls `OnWorkspaceSelected.InvokeAsync(id)`.
 
-    private void HandleChannelSelected(ChannelDto channel)
+    private async void HandleChannelSelected(ChannelDto channel)
     {
         CurrentChannel = channel;
+        if (CurrentWorkspace != null)
+        {
+            await LocalStorage.SetItemAsync($"workspace_{CurrentWorkspace.Id}_lastChannel", channel.Id);
+        }
         StateHasChanged();
+    }
+    
+    private async Task HandleWorkspacesReordered(List<WorkspaceDto> reorderedWorkspaces)
+    {
+        Workspaces = reorderedWorkspaces;
+        var ids = Workspaces.Select(w => w.Id).ToList();
+        await WorkspaceService.ReorderWorkspacesAsync(ids);
+    }
+    
+    private async Task HandleWorkspaceCreated(WorkspaceDto newWorkspace)
+    {
+        if (Workspaces == null) Workspaces = new List<WorkspaceDto>();
+        Workspaces.Add(newWorkspace);
+        await HandleWorkspaceSelected(newWorkspace.Id); // Auto switch
     }
 }

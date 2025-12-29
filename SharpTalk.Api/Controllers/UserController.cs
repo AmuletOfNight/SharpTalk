@@ -52,7 +52,9 @@ public class UserController : ControllerBase
             Username = user.Username,
             Email = user.Email,
             AvatarUrl = user.AvatarUrl,
-            Status = user.Status
+            Status = user.Status,
+            StartOnHome = user.StartOnHome,
+            AutoOpenLastChannel = user.AutoOpenLastChannel
         });
     }
 
@@ -78,6 +80,9 @@ public class UserController : ControllerBase
             user.AvatarUrl = userInfo.AvatarUrl;
         }
 
+        user.StartOnHome = userInfo.StartOnHome;
+        user.AutoOpenLastChannel = userInfo.AutoOpenLastChannel;
+
         await _context.SaveChangesAsync();
 
         await BroadcastStatusChange(userId, user.Status);
@@ -88,7 +93,9 @@ public class UserController : ControllerBase
             Username = user.Username,
             Email = user.Email,
             AvatarUrl = user.AvatarUrl,
-            Status = user.Status
+            Status = user.Status,
+            StartOnHome = user.StartOnHome,
+            AutoOpenLastChannel = user.AutoOpenLastChannel
         });
     }
 

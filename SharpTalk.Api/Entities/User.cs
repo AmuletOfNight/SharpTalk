@@ -9,4 +9,8 @@ public class User
     public string? AvatarUrl { get; set; }
     public string Status { get; set; } = "Online";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Preferences
+    public bool StartOnHome { get; set; } = false;
+    public bool AutoOpenLastChannel { get; set; } = true;
 }
