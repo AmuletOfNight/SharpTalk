@@ -119,12 +119,12 @@ public class UserService
             var content = new MultipartFormDataContent();
             var maxAvatarFileSize = int.Parse(_configuration["FileUploadSettings:MaxAvatarFileSizeBytes"] ?? "2097152");
             var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: maxAvatarFileSize));
-            
+
             // Handle empty or null ContentType by using a default MIME type
             var contentType = string.IsNullOrEmpty(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
-            
+
             fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             content.Add(fileContent, "avatar", file.Name);
 

@@ -38,7 +38,7 @@ public class ChatService : IAsyncDisposable
         if (_hubConnection == null)
         {
             var signalRHubUrl = _configuration["ApiSettings:SignalRHubUrl"] ?? "http://localhost:5298/chatHub";
-            
+
             _hubConnection = new HubConnectionBuilder()
                 .WithUrl(signalRHubUrl, options =>
                 {
@@ -130,14 +130,14 @@ public class ChatService : IAsyncDisposable
             Console.WriteLine($"[DEBUG] File ContentType: '{file.ContentType}'");
             Console.WriteLine($"[DEBUG] ContentType is null: {file.ContentType == null}");
             Console.WriteLine($"[DEBUG] ContentType is empty: {file.ContentType == string.Empty}");
-            
+
             var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: maxFileSize));
-            
+
             // Handle empty or null ContentType by using a default MIME type
             var contentType = string.IsNullOrEmpty(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
-            
+
             fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             content.Add(fileContent, "files", file.Name);
         }
