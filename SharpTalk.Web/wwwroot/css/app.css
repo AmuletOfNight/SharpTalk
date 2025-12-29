@@ -22,6 +22,11 @@ body {
     width: 48px;
     height: 48px;
     background-color: #36393f;
+    /* Keep as is? Or make transparent? The user said "blend". */
+    /* If I make it transparent, the icon might need a background if it's an image? But it's text. */
+    /* Let's Try turning it into the same color as the sidebar for "blending". */
+    background-color: #202225;
+    color: #dcddde;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -134,9 +139,67 @@ body {
     border-top: 1px solid #2f3136;
 }
 
+/* Dark Theme Overrides for Bootstrap Modals */
+/* Dark Theme Overrides for Bootstrap Modals */
+.btn-close {
+    background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23dcddde'%3e%3cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;
+}
+
 .close {
+    background: none;
+    border: none;
     color: #dcddde;
     text-shadow: none;
+    opacity: 0.8;
+    font-size: 1.5rem;
+    /* Ensure it's large enough */
+    line-height: 1;
+}
+
+.close:hover {
+    color: #fff;
+    opacity: 1;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+    /* Increase spacing */
+}
+
+.form-control {
+    background-color: #202225;
+    color: #dcddde;
+    border: 1px solid #202225;
+}
+
+.form-control:focus {
+    background-color: #202225;
+    color: #dcddde;
+    border-color: #5865f2;
+    box-shadow: 0 0 0 0.2rem rgba(88, 101, 242, 0.25);
+}
+
+.btn-primary {
+    background-color: #5865f2;
+    border-color: #5865f2;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #4752c4;
+    border-color: #4752c4;
+}
+
+.btn-secondary {
+    background-color: #747f8d;
+    /* "More grey" - slightly lighter/slate grey */
+    border-color: #747f8d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5e6670;
+    border-color: #5e6670;
 }
 
 /* Chat Area */

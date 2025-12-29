@@ -1,0 +1,26 @@
+@inherits LayoutComponentBase
+
+<div class="landing-layout">
+    <main>
+        @Body
+    </main>
+</div>
+
+<style>
+    .landing-layout {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background-color: #2f3136;
+        /* Darker background */
+        color: #fff;
+    }
+
+    .landing-layout main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+</style>

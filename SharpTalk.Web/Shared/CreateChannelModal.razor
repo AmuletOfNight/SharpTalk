@@ -34,7 +34,10 @@
                             <label class="form-check-label" for="isPrivate">Private Channel</label>
                         </div>
 
-                        <button type="submit" class="btn btn-primary">Create</button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create</button>
+                        </div>
                     </EditForm>
                 </div>
             </div>

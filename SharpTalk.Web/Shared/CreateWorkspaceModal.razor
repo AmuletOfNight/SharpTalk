@@ -22,7 +22,8 @@
                             <InputText @bind-Value="createRequest.Name" class="form-control" />
                             <ValidationMessage For="@(() => createRequest.Name)" />
                         </div>
-                        <div class="mt-3 text-right">
+
+                        <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
                             <button type="submit" class="btn btn-primary">Create</button>
                         </div>

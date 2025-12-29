@@ -1,5 +1,7 @@
 @page "/register"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @using SharpTalk.Shared.DTOs
+@layout SharpTalk.Web.Layout.LandingLayout
 @using SharpTalk.Web.Auth
 @using System.Net.Http.Json
 @inject HttpClient Http
@@ -55,7 +57,7 @@
             var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
             await LocalStorage.SetItemAsync("authToken", authResponse.Token);
             ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticated(authResponse.Token);
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo("/home");
         }
         else
         {

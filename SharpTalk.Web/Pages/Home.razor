@@ -1,7 +1,14 @@
-﻿@page "/"
+﻿@page "/home"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
-<PageTitle>Home</PageTitle>
+<div class="welcome-message"
+    style="display: flex; align-items: center; justify-content: center; height: 100%; color: #dcddde;">
+    <div class="text-center">
+        <h3>Welcome to SharpTalk!</h3>
+        <p>Select a workspace from the sidebar to get started.</p>
+    </div>
+</div>
 
-<h1>Hello, world!</h1>
+@code {
 
-Welcome to your new app.
+}

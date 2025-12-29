@@ -1,0 +1,32 @@
+@page "/"
+@layout SharpTalk.Web.Layout.LandingLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="text-center">
+    <h1 class="display-4 mb-4">Welcome to SharpTalk</h1>
+    <p class="lead mb-5">A real-time communication platform for teams.</p>
+
+    <div class="d-flex gap-3 justify-content-center">
+        <a href="login" class="btn btn-primary btn-lg px-5">Login</a>
+        <a href="register" class="btn btn-secondary btn-lg px-5">Register</a>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? authenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (authenticationStateTask != null)
+        {
+            var authState = await authenticationStateTask;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                Navigation.NavigateTo("/home");
+            }
+        }
+    }
+}
