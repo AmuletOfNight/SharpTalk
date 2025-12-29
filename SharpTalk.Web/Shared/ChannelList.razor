@@ -8,6 +8,7 @@
 @inject NavigationManager Navigation
 @inject ChatService ChatService
 @inject WorkspaceService WorkspaceService
+@inject UrlUtilityService UrlUtilityService
 
 <div class="channel-list">
     <div class="workspace-name-header">
@@ -67,8 +68,12 @@
     <ul class="list-group list-group-flush">
         @foreach (var member in Members)
         {
-            <li class="channel-item d-flex align-items-center">
-                <span class="status-indicator @(member.Status.ToLower()) me-2"></span>
+            <li class="channel-item d-flex align-items-center mb-1">
+                <div class="member-avatar-wrapper">
+                    <img src="@UrlUtilityService.GetAvatarUrl(member.AvatarUrl, "s")" 
+                         class="member-avatar-list @(member.Status.ToLower())" 
+                         alt="@member.Username" />
+                </div>
                 <span class="text-truncate">@member.Username</span>
             </li>
         }

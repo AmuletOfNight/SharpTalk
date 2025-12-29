@@ -2,6 +2,7 @@
 @using SharpTalk.Web.Services
 @inject UserService UserService
 @inject UrlUtilityService UrlUtilityService
+@inject IJSRuntime JSRuntime
 
 @if (IsOpen)
 {
@@ -16,8 +17,8 @@
                 <!-- Avatar Section -->
                 <div class="avatar-section">
                     <div class="avatar-container">
-                        <img src="@(previewUrl ?? UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl))"
-                             class="avatar-preview"
+                        <img src="@(previewUrl ?? UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl, "l"))"
+                             class="avatar-preview @(selectedStatus.ToLower())"
                              alt="Profile Avatar" />
                         @if (isUploading)
                         {
@@ -28,11 +29,33 @@
                     </div>
                     <div class="avatar-actions">
                         <label class="btn-upload">
-                            Upload New Avatar
+                            @(selectedFile == null ? "Select New Avatar" : "Change Selection")
                             <InputFile OnChange="HandleAvatarUpload" accept="image/jpeg,image/png,image/gif,image/webp" />
                         </label>
                         <small class="avatar-hint">JPG, PNG, GIF or WebP. Max 2MB.</small>
                     </div>
+
+                    @if (isCropping)
+                    {
+                        <div class="cropper-section">
+                            <div class="cropper-wrapper">
+                                <cropper-canvas id="@cropperImageId" background>
+                                    <cropper-image scalable translatable rotatable></cropper-image>
+                                    <cropper-selection initial-coverage="0.5" outlined movable resizable aspect-ratio="1">
+                                        <cropper-handle action="move" theme-color="rgba(255, 255, 255, 0.35)"></cropper-handle>
+                                        <cropper-handle action="n-resize"></cropper-handle>
+                                        <cropper-handle action="e-resize"></cropper-handle>
+                                        <cropper-handle action="s-resize"></cropper-handle>
+                                        <cropper-handle action="w-resize"></cropper-handle>
+                                        <cropper-handle action="ne-resize"></cropper-handle>
+                                        <cropper-handle action="nw-resize"></cropper-handle>
+                                        <cropper-handle action="se-resize"></cropper-handle>
+                                        <cropper-handle action="sw-resize"></cropper-handle>
+                                    </cropper-selection>
+                                </cropper-canvas>
+                            </div>
+                        </div>
+                    }
                 </div>
 
                 <!-- Profile Info -->
@@ -70,18 +93,26 @@
             </div>
 
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
-                <button type="button" class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
-                    @if (isSaving)
-                    {
-                        <span class="spinner-small"></span>
-                        <span>Saving...</span>
-                    }
-                    else
-                    {
-                        <span>Save Changes</span>
-                    }
-                </button>
+                @if (isCropping)
+                {
+                    <button type="button" class="btn btn-secondary" @onclick="CancelCrop">Cancel Selection</button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmCrop">Confirm Selection</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-small"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>Save Changes</span>
+                        }
+                    </button>
+                }
             </div>
         </div>
     </div>
@@ -96,6 +127,10 @@
     private string? previewUrl;
     private bool isUploading = false;
     private bool isSaving = false;
+    private bool isCropping = false;
+    private IBrowserFile? selectedFile;
+    private string? croppedBase64;
+    private string cropperImageId = $"cropper-{Guid.NewGuid():N}";
 
     public void Open()
     {
@@ -107,6 +142,31 @@
     {
         IsOpen = false;
         previewUrl = null;
+        isCropping = false;
+        selectedFile = null;
+        _ = JSRuntime.InvokeVoidAsync("imageCropper.destroy");
+    }
+
+    private void CancelCrop()
+    {
+        isCropping = false;
+        selectedFile = null;
+        previewUrl = null;
+        croppedBase64 = null;
+        _ = JSRuntime.InvokeVoidAsync("imageCropper.destroy");
+    }
+
+    private async Task ConfirmCrop()
+    {
+        var croppedData = await JSRuntime.InvokeAsync<string>("imageCropper.getCroppedImage");
+        if (!string.IsNullOrEmpty(croppedData))
+        {
+            croppedBase64 = croppedData;
+            previewUrl = croppedData;
+            isCropping = false;
+            // Don't clear selectedFile, we need it for the name in SaveSettings
+            await JSRuntime.InvokeVoidAsync("imageCropper.destroy");
+        }
     }
 
     private async void LoadCurrentUser()
@@ -145,27 +205,19 @@
             return;
         }
 
-        // Show preview
+        selectedFile = file;
+        isCropping = true;
+        StateHasChanged();
+
+        // Show preview and init cropper
         var memoryStream = new MemoryStream();
         await file.OpenReadStream(maxFileSize).CopyToAsync(memoryStream);
         var bytes = memoryStream.ToArray();
-        previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
-
-        // Upload
-        isUploading = true;
-        StateHasChanged();
-
-        var success = await UserService.UploadAvatarAsync(file);
-
-        isUploading = false;
+        var dataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
         
-        if (success)
-        {
-            previewUrl = null; // Clear preview to show actual uploaded avatar
-            CurrentUser = UserService.CurrentUser;
-        }
-        
-        StateHasChanged();
+        // Need a small delay to ensure the DOM is updated with the new img tag
+        await Task.Delay(100);
+        await JSRuntime.InvokeVoidAsync("imageCropper.init", cropperImageId, dataUrl);
     }
 
     private async Task SaveSettings()
@@ -175,24 +227,33 @@
         isSaving = true;
         StateHasChanged();
 
+        // Handle avatar upload if a file was selected and cropped
+        if (selectedFile != null && !string.IsNullOrEmpty(croppedBase64))
+        {
+            var successUpload = await UserService.UploadAvatarFromBase64Async(croppedBase64, selectedFile.Name);
+            if (successUpload)
+            {
+                selectedFile = null;
+                croppedBase64 = null;
+            }
+        }
+
         var updatedUser = new UserInfo
         {
             Id = CurrentUser.Id,
             Username = CurrentUser.Username,
             Email = CurrentUser.Email,
-            AvatarUrl = CurrentUser.AvatarUrl,
+            AvatarUrl = UserService.CurrentUser?.AvatarUrl ?? CurrentUser.AvatarUrl,
             Status = selectedStatus
         };
 
         var success = await UserService.UpdateUserInfoAsync(updatedUser);
 
         isSaving = false;
-        
         if (success)
         {
             Close();
         }
-        
         StateHasChanged();
     }
 

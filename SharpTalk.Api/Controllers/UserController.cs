@@ -1,8 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SharpTalk.Api.Data;
+using SharpTalk.Api.Hubs;
+using SharpTalk.Api.Services;
 using SharpTalk.Shared.DTOs;
+using StackExchange.Redis;
 
 namespace SharpTalk.Api.Controllers;
 
@@ -13,12 +17,18 @@ public class UserController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
     private readonly IConfiguration _configuration;
+    private readonly FileUploadService _fileUploadService;
+    private readonly IHubContext<ChatHub> _hubContext;
+    private readonly IDatabase _redis;
 
-    public UserController(ApplicationDbContext context, IWebHostEnvironment environment, IConfiguration configuration)
+    public UserController(ApplicationDbContext context, IWebHostEnvironment environment, IConfiguration configuration, FileUploadService fileUploadService, IHubContext<ChatHub> hubContext, IConnectionMultiplexer redis)
     {
         _context = context;
         _environment = environment;
         _configuration = configuration;
+        _fileUploadService = fileUploadService;
+        _hubContext = hubContext;
+        _redis = redis.GetDatabase();
     }
 
     [HttpGet("profile")]
@@ -70,6 +80,8 @@ public class UserController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await BroadcastStatusChange(userId, user.Status);
+
         return Ok(new UserInfo
         {
             Id = user.Id,
@@ -118,26 +130,8 @@ public class UserController : ControllerBase
         // Sanitize username to prevent path traversal attacks
         var sanitizedUsername = SanitizeUsername(user.Username);
 
-        // Create user-specific directory
-        var userAvatarPath = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads", "avatars", sanitizedUsername);
-        if (!Directory.Exists(userAvatarPath))
-        {
-            Directory.CreateDirectory(userAvatarPath);
-        }
-
-        // Generate random filename using GUID
-        var extension = Path.GetExtension(avatar.FileName).ToLower();
-        var randomFilename = $"{Guid.NewGuid()}{extension}";
-        var filePath = Path.Combine(userAvatarPath, randomFilename);
-
-        // Save file
-        using (var stream = new FileStream(filePath, FileMode.Create))
-        {
-            await avatar.CopyToAsync(stream);
-        }
-
-        // Generate URL with username folder
-        var avatarUrl = $"/uploads/avatars/{sanitizedUsername}/{randomFilename}";
+        // Process avatar using FileUploadService (resizing, compression, etc.)
+        var avatarUrl = await _fileUploadService.ProcessAvatarAsync(avatar, sanitizedUsername);
 
         // Delete old avatar if exists
         if (!string.IsNullOrEmpty(user.AvatarUrl) && user.AvatarUrl.StartsWith("/uploads/avatars/"))
@@ -226,7 +220,36 @@ public class UserController : ControllerBase
         user.Status = request.Status;
         await _context.SaveChangesAsync();
 
+        await BroadcastStatusChange(userId, user.Status);
+
         return Ok(user.Status);
+    }
+
+    private async Task BroadcastStatusChange(int userId, string status)
+    {
+        if (await _redis.SetContainsAsync("online_users", userId))
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return;
+
+            var statusDto = new UserStatusDto
+            {
+                UserId = userId,
+                Username = user.Username,
+                AvatarUrl = user.AvatarUrl,
+                Status = status
+            };
+
+            var workspaceIds = await _context.WorkspaceMembers
+                .Where(wm => wm.UserId == userId)
+                .Select(wm => wm.WorkspaceId)
+                .ToListAsync();
+
+            foreach (var workspaceId in workspaceIds)
+            {
+                await _hubContext.Clients.Group($"workspace_{workspaceId}").SendAsync("UserStatusChanged", statusDto);
+            }
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+@using SharpTalk.Shared
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
 @using System.Security.Claims
@@ -15,8 +16,8 @@
         {
             var isMine = msg.UserId == currentUserId;
             <div class='message-item @(isMine ? "message-mine" : "message-others")'>
-                <img src="@UrlUtilityService.GetAvatarUrl(msg.AvatarUrl)"
-                     class="message-avatar"
+                <img src="@UrlUtilityService.GetAvatarUrl(msg.AvatarUrl, "s")"
+                     class="message-avatar @(msg.UserStatus.ToLower())"
                      alt="@msg.Username" />
                 <div class="message-body">
                     <div class="message-info">
@@ -27,6 +28,7 @@
                         <div class="message-content">@msg.Content</div>
                         @if (msg.Attachments.Any())
                         {
+                            <div class="message-attachment-divider"></div>
                             <div class="message-attachments">
                                 @foreach (var attachment in msg.Attachments)
                                 {
@@ -91,13 +93,25 @@
                 }
             </div>
         }
+        @if (!string.IsNullOrEmpty(uploadErrorMessage))
+        {
+            <div class="upload-error-message">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>@uploadErrorMessage</span>
+                <button type="button" @onclick="() => uploadErrorMessage = null" class="close-error">×</button>
+            </div>
+        }
         <form @onsubmit="SendMessage">
             <div class="chat-input-container">
                 <label class="attach-btn" title="Attach files">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                     </svg>
-                    <InputFile OnChange="HandleFileSelect" multiple />
+                    <InputFile OnChange="HandleFileSelect" multiple accept="@string.Join(",", FileUploadConstants.AllowedMimeTypes)" />
                 </label>
                 <input type="text" class="message-input-field" placeholder="Message #Channel" @bind="newMessage"
                     @bind:event="oninput" />
@@ -153,6 +167,7 @@
     private List<AttachmentDto> uploadedAttachments = new List<AttachmentDto>();
     private bool isUploading = false;
     private AttachmentDto? previewAttachment;
+    private string? uploadErrorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -162,6 +177,7 @@
 
         ChatService.OnMessageReceived += HandleMessageReceived;
         ChatService.OnUserTyping += HandleUserTyping;
+        ChatService.OnUserStatusChanged += HandleUserStatusChanged;
         await ChatService.InitializeAsync();
     }
 
@@ -223,6 +239,24 @@
         }
     }
 
+    private async void HandleUserStatusChanged(UserStatusDto status)
+    {
+        bool changed = false;
+        foreach (var msg in Messages.Where(m => m.UserId == status.UserId))
+        {
+            if (msg.UserStatus != status.Status)
+            {
+                msg.UserStatus = status.Status;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private void HandleTyping()
     {
         // Prevent sending typing indicators to invalid channel (0)
@@ -260,41 +294,93 @@
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(newMessage) || selectedFiles.Any())
+        bool hasText = !string.IsNullOrWhiteSpace(newMessage);
+        bool hasFiles = selectedFiles.Any();
+
+        if (hasText || hasFiles)
         {
             var content = newMessage;
+            var filesToSend = new List<IBrowserFile>(selectedFiles);
+            
             newMessage = string.Empty;
+            selectedFiles.Clear();
             isTypingSent = false;
             typingTimer?.Stop();
+            uploadErrorMessage = null;
 
             // Upload files first if any
             List<int> attachmentIds = new List<int>();
-            if (selectedFiles.Any())
+            if (filesToSend.Any())
             {
                 isUploading = true;
                 StateHasChanged();
 
-                uploadedAttachments = await ChatService.UploadFilesAsync(selectedFiles, ChannelId);
-                attachmentIds = uploadedAttachments.Select(a => a.Id).ToList();
+                try
+                {
+                    uploadedAttachments = await ChatService.UploadFilesAsync(filesToSend, ChannelId);
+                    attachmentIds = uploadedAttachments.Select(a => a.Id).ToList();
 
-                selectedFiles.Clear();
+                    if (attachmentIds.Count == 0)
+                    {
+                        uploadErrorMessage = "Failed to upload files. Message not sent.";
+                        newMessage = content;
+                        selectedFiles.AddRange(filesToSend);
+                        isUploading = false;
+                        StateHasChanged();
+                        return;
+                    }
+                    
+                    if (attachmentIds.Count < filesToSend.Count)
+                    {
+                        // Some files failed, but some succeeded. We can either proceed or block.
+                        // For now we'll proceed but notify. Actually, usually it's better to block if any fail
+                        // but if they succeeded in the API they are already saved.
+                    }
+                }
+                catch (Exception ex)
+                {
+                    uploadErrorMessage = ex.Message;
+                    newMessage = content;
+                    selectedFiles.AddRange(filesToSend);
+                    isUploading = false;
+                    StateHasChanged();
+                    return;
+                }
+
                 isUploading = false;
             }
 
-            await ChatService.SendMessageAsync(ChannelId, content, attachmentIds);
-            await ChatService.SendTypingIndicatorAsync(ChannelId, false);
+            // Only send the message if there's either text or at least one successful attachment
+            if (!string.IsNullOrWhiteSpace(content) || attachmentIds.Any())
+            {
+                await ChatService.SendMessageAsync(ChannelId, content, attachmentIds);
+                await ChatService.SendTypingIndicatorAsync(ChannelId, false);
+            }
+            StateHasChanged();
         }
     }
 
-    private async void HandleFileSelect(InputFileChangeEventArgs e)
+    private void HandleFileSelect(InputFileChangeEventArgs e)
     {
-        foreach (var file in e.GetMultipleFiles())
+        uploadErrorMessage = null;
+        var files = e.GetMultipleFiles();
+        foreach (var file in files)
         {
+            // Validate file type
+            if (!FileUploadConstants.AllowedMimeTypes.Contains(file.ContentType.ToLower()))
+            {
+                uploadErrorMessage = $"File '{file.Name}' is not an allowed type.";
+                continue;
+            }
+
             // Validate file size
-            var maxSize = file.ContentType.StartsWith("image/") ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+            var isImage = file.ContentType.StartsWith("image/");
+            var maxSize = isImage ? FileUploadConstants.MaxImageFileSize : FileUploadConstants.MaxOtherFileSize;
+            
             if (file.Size > maxSize)
             {
-                continue; // Skip files that are too large
+                uploadErrorMessage = $"File '{file.Name}' exceeds the size limit ({maxSize / (1024 * 1024)}MB).";
+                continue; 
             }
 
             selectedFiles.Add(file);
@@ -405,6 +491,7 @@
     {
         ChatService.OnMessageReceived -= HandleMessageReceived;
         ChatService.OnUserTyping -= HandleUserTyping;
+        ChatService.OnUserStatusChanged -= HandleUserStatusChanged;
         typingTimer?.Dispose();
         if (_currentChannelId > 0)
         {

@@ -149,6 +149,51 @@ public class UserService
         return false;
     }
 
+    public async Task<bool> UploadAvatarFromBase64Async(string base64Data, string fileName)
+    {
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        if (string.IsNullOrEmpty(token)) return false;
+
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        try
+        {
+            // Extract the actual base64 string from the data URL if present
+            var commaIndex = base64Data.IndexOf(',');
+            if (commaIndex >= 0)
+            {
+                base64Data = base64Data.Substring(commaIndex + 1);
+            }
+
+            var bytes = Convert.FromBase64String(base64Data);
+            var content = new MultipartFormDataContent();
+            var byteContent = new ByteArrayContent(bytes);
+
+            // Assume the cropper always returns webp as per our js helper
+            byteContent.Headers.ContentType = new MediaTypeHeaderValue("image/webp");
+            content.Add(byteContent, "avatar", fileName);
+
+            var response = await _httpClient.PostAsync("api/user/avatar", content);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<AvatarUploadResult>();
+                if (result != null && _currentUser != null)
+                {
+                    _currentUser.AvatarUrl = result.AvatarUrl;
+                    await _localStorage.SetItemAsync("userInfo", System.Text.Json.JsonSerializer.Serialize(_currentUser));
+                    OnUserInfoChanged?.Invoke(_currentUser);
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error uploading base64 avatar: {ex.Message}");
+        }
+
+        return false;
+    }
+
     public async Task<bool> UpdateStatusAsync(string status)
     {
         var token = await _localStorage.GetItemAsync<string>("authToken");

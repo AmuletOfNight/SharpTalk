@@ -3,7 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
+using SharpTalk.Shared;
 using SharpTalk.Shared.DTOs;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Formats.Webp;
 
 namespace SharpTalk.Api.Services;
 
@@ -31,26 +35,14 @@ public class FileUploadService
             if (file == null || file.Length == 0) continue;
 
             // Validate file type
-            var allowedTypes = new[] { 
-                "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
-                "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/zip", "application/x-rar-compressed", "application/x-7z-compressed",
-                "application/x-tar", "application/gzip",
-                "text/plain", "text/csv", "application/json", "application/xml", "text/xml"
-            };
-
-            if (!allowedTypes.Contains(file.ContentType.ToLower()))
+            if (!FileUploadConstants.AllowedMimeTypes.Contains(file.ContentType.ToLower()))
             {
                 throw new ArgumentException($"Invalid file type: {file.ContentType}");
             }
 
             // Validate file size
             var isImage = file.ContentType.StartsWith("image/");
-            var maxImageFileSize = int.Parse(_configuration["FileUploadSettings:MaxImageFileSizeBytes"] ?? "5242880");
-            var maxOtherFileSize = int.Parse(_configuration["FileUploadSettings:MaxOtherFileSizeBytes"] ?? "10485760");
-            var maxSize = isImage ? maxImageFileSize : maxOtherFileSize;
+            var maxSize = isImage ? FileUploadConstants.MaxImageFileSize : FileUploadConstants.MaxOtherFileSize;
 
             if (file.Length > maxSize)
             {
@@ -126,6 +118,57 @@ public class FileUploadService
             FileSize = attachment.FileSize,
             CreatedAt = attachment.CreatedAt
         };
+    }
+
+    public async Task<string> ProcessAvatarAsync(Microsoft.AspNetCore.Http.IFormFile file, string sanitizedUsername)
+    {
+        if (file == null || file.Length == 0) throw new ArgumentException("No file uploaded");
+
+        // Create user-specific directory
+        var userAvatarPath = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads", "avatars", sanitizedUsername);
+        if (!Directory.Exists(userAvatarPath))
+        {
+            Directory.CreateDirectory(userAvatarPath);
+        }
+
+        var baseFilename = Guid.NewGuid().ToString();
+        var resultUrl = string.Empty;
+
+        // Define sizes: Small (32), Medium (64), Large (128)
+        var sizes = new Dictionary<string, int>
+        {
+            { "s", 32 },
+            { "m", 64 },
+            { "l", 128 }
+        };
+
+        using var image = await Image.LoadAsync(file.OpenReadStream());
+
+        foreach (var size in sizes)
+        {
+            using var resized = image.Clone(x => x.Resize(new ResizeOptions
+            {
+                Size = new Size(size.Value, size.Value),
+                Mode = ResizeMode.Crop
+            }));
+
+            var filename = $"{baseFilename}_{size.Key}.webp";
+            var filePath = Path.Combine(userAvatarPath, filename);
+
+            await resized.SaveAsync(filePath, new WebpEncoder { Quality = 80 });
+
+            if (size.Key == "m") // Use medium as the "default" URL stored in DB
+            {
+                resultUrl = $"/uploads/avatars/{sanitizedUsername}/{filename}";
+            }
+        }
+
+        // Also save a original-ish version but optimized
+        var originalFilename = $"{baseFilename}.webp";
+        var originalPath = Path.Combine(userAvatarPath, originalFilename);
+        await image.SaveAsync(originalPath, new WebpEncoder { Quality = 90 });
+
+        return resultUrl;
     }
 
     public async Task<bool> CanAccessAttachmentAsync(int attachmentId, int userId)

@@ -140,7 +140,8 @@ public class WorkspaceController : ControllerBase
             {
                 UserId = wm.UserId,
                 Username = wm.User.Username,
-                Status = "Offline" // Default, will verify against Redis
+                AvatarUrl = wm.User.AvatarUrl,
+                Status = wm.User.Status
             })
             .ToListAsync();
 
@@ -150,9 +151,9 @@ public class WorkspaceController : ControllerBase
 
         foreach (var member in members)
         {
-            if (onlineUserIds.Contains(member.UserId))
+            if (!onlineUserIds.Contains(member.UserId))
             {
-                member.Status = "Online";
+                member.Status = "Offline";
             }
         }
 

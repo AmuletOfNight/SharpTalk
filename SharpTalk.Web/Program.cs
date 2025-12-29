@@ -19,7 +19,10 @@ builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddScoped<SharpTalk.Web.Services.WorkspaceService>();
 builder.Services.AddScoped<SharpTalk.Web.Services.ChannelService>();
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
+builder.Services.AddTransient<JwtAuthenticationHandler>();
+builder.Services.AddHttpClient("SharpTalk.Api", client => client.BaseAddress = new Uri(apiBaseUrl))
+    .AddHttpMessageHandler<JwtAuthenticationHandler>();
+builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("SharpTalk.Api"));
 builder.Services.AddScoped<SharpTalk.Web.Services.ChatService>();
 builder.Services.AddScoped<SharpTalk.Web.Services.UserService>();
 builder.Services.AddScoped<SharpTalk.Web.Services.UrlUtilityService>();

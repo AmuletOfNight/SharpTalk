@@ -7,6 +7,7 @@ using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Api.Services;
 using SharpTalk.Shared.DTOs;
+using StackExchange.Redis;
 using System.Security.Claims;
 
 namespace SharpTalk.Api.Controllers;
@@ -20,13 +21,15 @@ public class MessageController : ControllerBase
     private readonly FileUploadService _fileUploadService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MessageController> _logger;
+    private readonly IDatabase _redis;
 
-    public MessageController(ApplicationDbContext context, FileUploadService fileUploadService, IConfiguration configuration, ILogger<MessageController> logger)
+    public MessageController(ApplicationDbContext context, FileUploadService fileUploadService, IConfiguration configuration, ILogger<MessageController> logger, IConnectionMultiplexer redis)
     {
         _context = context;
         _fileUploadService = fileUploadService;
         _configuration = configuration;
         _logger = logger;
+        _redis = redis.GetDatabase();
     }
 
     [HttpGet("{channelId}")]
@@ -59,7 +62,7 @@ public class MessageController : ControllerBase
         }
 
         var maxMessagesToRetrieve = int.Parse(_configuration["MessageSettings:MaxMessagesToRetrieve"] ?? "50");
-        
+
         var messages = await _context.Messages
             .Where(m => m.ChannelId == channelId)
             .Include(m => m.User) // Include user to get username
@@ -73,6 +76,7 @@ public class MessageController : ControllerBase
                 UserId = m.UserId,
                 Username = m.User.Username,
                 AvatarUrl = m.User.AvatarUrl,
+                UserStatus = m.User.Status,
                 Content = m.Content,
                 Timestamp = m.Timestamp,
                 Attachments = m.Attachments.Select(a => new AttachmentDto
@@ -87,6 +91,17 @@ public class MessageController : ControllerBase
                 }).ToList()
             })
             .ToListAsync();
+
+        var onlineUsers = await _redis.SetMembersAsync("online_users");
+        var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
+
+        foreach (var msg in messages)
+        {
+            if (!onlineUserIds.Contains(msg.UserId))
+            {
+                msg.UserStatus = "Offline";
+            }
+        }
 
         return Ok(messages);
     }
@@ -135,7 +150,7 @@ public class MessageController : ControllerBase
     public async Task<IActionResult> DownloadAttachment(int attachmentId)
     {
         _logger.LogInformation("DownloadAttachment called: AttachmentId={AttachmentId}, User={UserId}", attachmentId, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-        
+
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
         // Check if user can access this attachment

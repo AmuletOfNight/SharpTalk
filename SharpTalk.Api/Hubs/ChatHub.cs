@@ -32,7 +32,9 @@ public class ChatHub : Hub
             // Only notify online if this is the first set addition (race-condition safe)
             if (await _redis.SetAddAsync("online_users", userId))
             {
-                await NotifyPresenceChanged(userId, "Online");
+                var user = await _context.Users.FindAsync(userId);
+                var status = user?.Status ?? "Online";
+                await NotifyPresenceChanged(userId, status);
             }
         }
         await base.OnConnectedAsync();
@@ -86,14 +88,17 @@ public class ChatHub : Hub
         return true;
     }
 
-    private async Task NotifyPresenceChanged(int userId, string status)
+    public async Task NotifyPresenceChanged(int userId, string? status = null)
     {
-        var username = GetUsername();
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return;
+
         var statusDto = new UserStatusDto
         {
             UserId = userId,
-            Username = username,
-            Status = status
+            Username = user.Username,
+            AvatarUrl = user.AvatarUrl,
+            Status = status ?? user.Status
         };
 
         // Notify workspaces this user belongs to
@@ -197,6 +202,7 @@ public class ChatHub : Hub
             UserId = userId,
             Username = username,
             AvatarUrl = avatarUrl,
+            UserStatus = user?.Status ?? "Offline",
             Content = content,
             Timestamp = message.Timestamp,
             Attachments = attachmentDtos

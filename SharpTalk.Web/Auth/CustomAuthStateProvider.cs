@@ -9,12 +9,9 @@ namespace SharpTalk.Web.Auth;
 public class CustomAuthStateProvider : AuthenticationStateProvider
 {
     private readonly ILocalStorageService _localStorage;
-    private readonly HttpClient _httpClient;
-
-    public CustomAuthStateProvider(ILocalStorageService localStorage, HttpClient httpClient)
+    public CustomAuthStateProvider(ILocalStorageService localStorage)
     {
         _localStorage = localStorage;
-        _httpClient = httpClient;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -26,14 +23,14 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
             return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
         }
 
-        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
 
         return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt")));
     }
 
     public void MarkUserAsAuthenticated(string token)
     {
-        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
         var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt"));
         var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
         NotifyAuthenticationStateChanged(authState);
@@ -41,7 +38,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public async Task MarkUserAsAuthenticatedWithUserInfo(string token, AuthResponse authResponse)
     {
-        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
 
         var userInfo = new UserInfo
         {
@@ -61,7 +58,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public void MarkUserAsLoggedOut()
     {
-        _httpClient.DefaultRequestHeaders.Authorization = null;
+
         var anonymousUser = new ClaimsPrincipal(new ClaimsIdentity());
         var authState = Task.FromResult(new AuthenticationState(anonymousUser));
         NotifyAuthenticationStateChanged(authState);

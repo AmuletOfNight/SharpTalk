@@ -267,6 +267,17 @@ label.form-label {
     border-color: #5e6670;
 }
 
+.btn-success {
+    background-color: #3ba55c;
+    border-color: #3ba55c;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #2d7d46;
+    border-color: #2d7d46;
+}
+
 /* Chat Area */
 .chat-area {
     display: flex;
@@ -344,9 +355,10 @@ label.form-label {
 /* Presence Indicators */
 .status-indicator {
     display: inline-block;
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
+    margin-right: 8px;
 }
 
 .status-indicator.online {
@@ -415,6 +427,13 @@ label.form-label {
     background-color: #4e5058;
     color: #dcddde;
     border-bottom-left-radius: 4px;
+}
+
+.message-attachment-divider {
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.1);
+    margin: 8px 0;
+    width: 100%;
 }
 
 @media (max-width: 480px) {
@@ -747,42 +766,22 @@ label.form-label {
     border-radius: 50%;
     object-fit: cover;
     background-color: #5865f2;
+    border: 2px solid #292b2f;
+    /* Gap color matching user pill bg */
+    box-shadow: 0 0 0 2px transparent;
+    transition: all 0.2s ease;
 }
 
-.user-avatar.online::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    background-color: #3ba55c;
-    border-radius: 50%;
-    border: 2px solid #292b2f;
+.user-avatar.online {
+    box-shadow: 0 0 0 2px #3ba55c;
 }
 
-.user-avatar.away::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    background-color: #faa61a;
-    border-radius: 50%;
-    border: 2px solid #292b2f;
+.user-avatar.away {
+    box-shadow: 0 0 0 2px #faa61a;
 }
 
-.user-avatar.offline::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    background-color: #747f8d;
-    border-radius: 50%;
-    border: 2px solid #292b2f;
+.user-avatar.offline {
+    box-shadow: 0 0 0 2px #747f8d;
 }
 
 .user-info {
@@ -868,6 +867,22 @@ label.form-label {
     margin-right: 12px;
     flex-shrink: 0;
     background-color: #5865f2;
+    border: 2px solid #36393f;
+    /* Gap color matching chat area bg */
+    box-shadow: 0 0 0 2px transparent;
+    transition: all 0.2s ease;
+}
+
+.message-avatar.online {
+    box-shadow: 0 0 0 2px #3ba55c;
+}
+
+.message-avatar.away {
+    box-shadow: 0 0 0 2px #faa61a;
+}
+
+.message-avatar.offline {
+    box-shadow: 0 0 0 2px #747f8d;
 }
 
 .message-body {
@@ -875,9 +890,43 @@ label.form-label {
     min-width: 0;
 }
 
+/* Member List Avatars */
+.member-avatar-wrapper {
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.member-avatar-list {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: #5865f2;
+    border: 1.5px solid #2f3136;
+    /* Sidebar container gap */
+    box-shadow: 0 0 0 1.5px transparent;
+    transition: all 0.2s ease;
+}
+
+.member-avatar-list.online {
+    box-shadow: 0 0 0 1.5px #3ba55c;
+}
+
+.member-avatar-list.away {
+    box-shadow: 0 0 0 1.5px #faa61a;
+}
+
+.member-avatar-list.offline {
+    box-shadow: 0 0 0 1.5px #747f8d;
+}
+
 /* User Settings Modal */
 .user-settings-modal {
     max-width: 450px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .avatar-section {
@@ -898,7 +947,22 @@ label.form-label {
     height: 100px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid #40444b;
+    border: 4px solid #36393f;
+    /* Modal background gap */
+    box-shadow: 0 0 0 4px #40444b;
+    transition: all 0.2s ease;
+}
+
+.avatar-preview.online {
+    box-shadow: 0 0 0 4px #3ba55c;
+}
+
+.avatar-preview.away {
+    box-shadow: 0 0 0 4px #faa61a;
+}
+
+.avatar-preview.offline {
+    box-shadow: 0 0 0 4px #747f8d;
 }
 
 .avatar-loading {
@@ -946,12 +1010,57 @@ label.form-label {
     font-size: 12px;
 }
 
+/* Cropper Styles */
+.cropper-wrapper {
+    max-width: 100%;
+    margin: 15px 0;
+    overflow: hidden;
+    background-color: #202225;
+    border-radius: 8px;
+}
+
+cropper-canvas {
+    display: block;
+    width: 100%;
+    height: 300px;
+}
+
+cropper-selection {
+    border-radius: 50%;
+}
+
+.cropper-section {
+    position: relative;
+    margin-top: 10px;
+}
+
+.cropper-view-box,
+.cropper-face {
+    border-radius: 50%;
+}
+
+.user-settings-modal .form-control:disabled {
+    background-color: rgba(0, 0, 0, 0.15);
+    border-color: transparent;
+    color: #8e9297;
+    cursor: not-allowed;
+}
+
 .form-section {
     padding: 0 8px;
 }
 
 .form-section .form-group {
     margin-bottom: 20px;
+}
+
+.form-section label {
+    color: #b9bbbe;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    margin-bottom: 8px;
+    display: block;
 }
 
 .form-section .form-hint {
@@ -1089,6 +1198,8 @@ label.form-label {
 
 .user-settings-modal .modal-body {
     padding: 20px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 .user-settings-modal .modal-footer {
@@ -1549,5 +1660,62 @@ label.form-label {
         width: 28px;
         height: 28px;
         font-size: 14px;
+    }
+}
+
+/* Upload Error Message */
+.upload-error-message {
+    background-color: #f04747;
+    color: white;
+    padding: 8px 12px;
+    margin: 8px 20px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    position: relative;
+    animation: slideIn 0.2s ease-out;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.upload-error-message svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.upload-error-message span {
+    flex: 1;
+}
+
+.upload-error-message .close-error {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    margin-left: auto;
+    padding: 0 4px;
+    line-height: 1;
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upload-error-message .close-error:hover {
+    opacity: 1;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
     }
 }

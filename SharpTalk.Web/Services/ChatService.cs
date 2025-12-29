@@ -152,7 +152,8 @@ public class ChatService : IAsyncDisposable
             return await response.Content.ReadFromJsonAsync<List<AttachmentDto>>() ?? new List<AttachmentDto>();
         }
 
-        return new List<AttachmentDto>();
+        var errorMessage = await response.Content.ReadAsStringAsync();
+        throw new HttpRequestException($"Upload failed with status {response.StatusCode}: {errorMessage}");
     }
 
     public async Task<string> DownloadAttachmentAsync(int attachmentId)

@@ -6,8 +6,8 @@
 <div class="user-profile-container">
     <div class="user-profile" @onclick="ToggleDropdown">
         <div class="user-avatar-wrapper">
-            <img src="@UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl)"
-                 class="user-avatar @(CurrentUser?.Status == "Online" ? "online" : CurrentUser?.Status == "Away" ? "away" : "")"
+            <img src="@UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl, "m")"
+                 class="user-avatar @(CurrentUser?.Status?.ToLower() ?? "offline")"
                  alt="@CurrentUser?.Username" />
         </div>
         <div class="user-info">
@@ -23,7 +23,7 @@
             <button class="dropdown-item" @onclick="OpenSettings">
                 <span class="icon">⚙️</span> Settings
             </button>
-            <button class="dropdown-item" @click="Logout">
+            <button class="dropdown-item" @onclick="Logout">
                 <span class="icon">🚪</span> Logout
             </button>
         </div>
