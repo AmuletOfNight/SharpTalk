@@ -2,19 +2,22 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.SignalR.Client;
 using SharpTalk.Shared.DTOs;
+using System.Net.Http.Json;
 
 namespace SharpTalk.Web.Services;
 
 public class ChatService : IAsyncDisposable
 {
     private HubConnection? _hubConnection;
+    private readonly HttpClient _httpClient;
     private readonly NavigationManager _navigationManager;
     private readonly ILocalStorageService _localStorage;
 
     public event Action<MessageDto>? OnMessageReceived;
 
-    public ChatService(NavigationManager navigationManager, ILocalStorageService localStorage)
+    public ChatService(HttpClient httpClient, NavigationManager navigationManager, ILocalStorageService localStorage)
     {
+        _httpClient = httpClient;
         _navigationManager = navigationManager;
         _localStorage = localStorage;
     }
@@ -62,6 +65,14 @@ public class ChatService : IAsyncDisposable
         {
             await _hubConnection.SendAsync("SendMessage", channelId, content);
         }
+    }
+
+    public async Task<List<MessageDto>> GetMessageHistoryAsync(int channelId)
+    {
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        return await _httpClient.GetFromJsonAsync<List<MessageDto>>($"api/message/{channelId}") ?? new List<MessageDto>();
     }
 
     public async ValueTask DisposeAsync()

@@ -48,7 +48,12 @@
             }
 
             _currentChannelId = ChannelId;
-            Messages.Clear(); // Clear messages from previous channel (until history is implemented)
+            Messages.Clear();
+
+            // Load history
+            var history = await ChatService.GetMessageHistoryAsync(ChannelId);
+            Messages.AddRange(history);
+            StateHasChanged();
 
             await ChatService.JoinChannelAsync(ChannelId);
         }
