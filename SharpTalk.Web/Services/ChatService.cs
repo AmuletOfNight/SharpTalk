@@ -73,9 +73,9 @@ public class ChatService : IAsyncDisposable
                 await _hubConnection.StartAsync();
             }
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error starting hub connection: {ex.Message}");
+            // Connection error - will retry on next initialize
         }
     }
 
@@ -116,20 +116,14 @@ public class ChatService : IAsyncDisposable
         var token = await _localStorage.GetItemAsync<string>("authToken");
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        Console.WriteLine($"[DEBUG] HttpClient BaseAddress: {_httpClient.BaseAddress}");
-        Console.WriteLine($"[DEBUG] Upload URL: {_httpClient.BaseAddress}api/message/upload");
-        Console.WriteLine($"[DEBUG] Number of files: {files.Count}");
+
 
         var content = new MultipartFormDataContent();
         var maxFileSize = int.Parse(_configuration["FileUploadSettings:MaxChatFileSizeBytes"] ?? "10485760");
 
         foreach (var file in files)
         {
-            // DIAGNOSTIC LOG: Check file ContentType
-            Console.WriteLine($"[DEBUG] Uploading file: {file.Name}");
-            Console.WriteLine($"[DEBUG] File ContentType: '{file.ContentType}'");
-            Console.WriteLine($"[DEBUG] ContentType is null: {file.ContentType == null}");
-            Console.WriteLine($"[DEBUG] ContentType is empty: {file.ContentType == string.Empty}");
+
 
             var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: maxFileSize));
 
@@ -144,9 +138,7 @@ public class ChatService : IAsyncDisposable
 
         content.Add(new StringContent(channelId.ToString()), "channelId");
 
-        Console.WriteLine($"[DEBUG] Sending POST request to api/message/upload");
         var response = await _httpClient.PostAsync("api/message/upload", content);
-        Console.WriteLine($"[DEBUG] Response status: {response.StatusCode}");
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<List<AttachmentDto>>() ?? new List<AttachmentDto>();

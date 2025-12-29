@@ -186,9 +186,9 @@ public class UserService
                 }
             }
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error uploading base64 avatar: {ex.Message}");
+            // Upload failed
         }
 
         return false;

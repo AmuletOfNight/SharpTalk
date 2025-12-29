@@ -1,4 +1,5 @@
 @using SharpTalk.Shared.DTOs
+@using SharpTalk.Shared.Enums
 @using SharpTalk.Web.Services
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
@@ -45,36 +46,48 @@
     <ul class="list-group list-group-flush mb-2">
         @if (isLoading)
         {
-            @for (int i = 0; i < 5; i++)
+            @for (int i = 0; i < 3; i++)
             {
                 <div class="skeleton skeleton-channel"></div>
             }
         }
         else
         {
-            @foreach (var channel in Channels)
+            @foreach (var channel in Channels.Where(c => c.Type != ChannelType.Direct))
             {
                 <li class="channel-item @(selectedChannelId == channel.Id ? "active" : "")"
             @onclick="() => SelectChannel(channel)">
-                    <span class="channel-hash">#</span> @channel.Name
+                    <span class="channel-hash">@((channel.IsPrivate) ? "🔒" : "#")</span> @channel.Name
                 </li>
             }
         }
     </ul>
 
-    <div class="sidebar-category">
+    <!-- DMs moved to Global View -->
+
+    <div class="sidebar-category mt-3">
         <h6>Members</h6>
     </div>
     <ul class="list-group list-group-flush">
         @foreach (var member in Members)
         {
-            <li class="channel-item d-flex align-items-center mb-1">
-                <div class="member-avatar-wrapper">
-                    <img src="@UrlUtilityService.GetAvatarUrl(member.AvatarUrl, "s")" 
-                         class="member-avatar-list @(member.Status.ToLower())" 
-                         alt="@member.Username" />
+            <li class="channel-item d-flex align-items-center mb-1 member-item justify-content-between" style="cursor: default;">
+                <div class="d-flex align-items-center" style="min-width: 0;">
+                    <div class="member-avatar-wrapper">
+                        <img src="@UrlUtilityService.GetAvatarUrl(member.AvatarUrl, "s")" 
+                             class="member-avatar-list @(member.Status.ToLower())" 
+                             alt="@member.Username" />
+                    </div>
+                    <span class="text-truncate">@member.Username</span>
                 </div>
-                <span class="text-truncate">@member.Username</span>
+                @if (member.UserId != _currentUserId)
+                {
+                    <button class="btn btn-sm btn-icon text-muted dm-btn" title="Message" @onclick="() => StartDM(member)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </button>
+                }
             </li>
         }
     </ul>
@@ -101,18 +114,26 @@
     private bool IsOwner;
     private int _lastWorkspaceId;
     private bool isLoading;
+    private int _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
         ChatService.OnUserStatusChanged += HandleUserStatusChanged;
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userIdStr = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdStr, out int userId))
+        {
+            _currentUserId = userId;
+        }
         await base.OnInitializedAsync();
     }
+    
+    // ... [Rest of methods seem largely fine, just adding OpenStartDMModal]
 
     protected override async Task OnParametersSetAsync()
     {
         if (Workspace != null)
         {
-            // If workspace changed, reload everything
             if (Workspace.Id != _lastWorkspaceId)
             {
                 isLoading = true;
@@ -121,11 +142,6 @@
                 await CheckOwnership();
                 await LoadChannels();
                 await LoadMembers();
-                
-                // Select channel logic:
-                // 1. If ActiveChannelId is valid for this workspace, use it.
-                // 2. Else if we have channels, default to first.
-                // 3. Else none.
                 
                 ChannelDto? targetChannel = null;
                 
@@ -136,7 +152,7 @@
                 
                 if (targetChannel == null && Channels.Any())
                 {
-                    targetChannel = Channels.First();
+                    targetChannel = Channels.FirstOrDefault(c => c.Type != ChannelType.Direct) ?? Channels.FirstOrDefault();
                 }
                 
                 if (targetChannel != null)
@@ -152,9 +168,6 @@
             }
             else if (ActiveChannelId != selectedChannelId && ActiveChannelId > 0)
             {
-                // If just switching channels via parent (e.g. from somewhere else not sidebar?), sync UI
-                // But usually ChannelList drives the parent. 
-                // However if we want to support external navigation, we update here.
                 selectedChannelId = ActiveChannelId;
             }
         }
@@ -162,12 +175,7 @@
 
     private async Task CheckOwnership()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var userIdStr = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (int.TryParse(userIdStr, out int userId))
-        {
-            IsOwner = Workspace?.OwnerId == userId;
-        }
+       IsOwner = Workspace?.OwnerId == _currentUserId;
     }
 
     private async Task LoadChannels()
@@ -182,7 +190,7 @@
     {
         if (Workspace != null)
         {
-            Members = await WorkspaceService.GetWorkspaceMembersAsync(Workspace.Id);
+           Members = await WorkspaceService.GetWorkspaceMembersAsync(Workspace.Id);
         }
     }
 
@@ -196,10 +204,7 @@
         }
         else
         {
-            // If user just joined or we didn't have them, refresh list?
-            // Actually, if they are in the workspace but not in the initial list, they might be new.
-            // For now, let's just refresh if they are not found.
-            _ = LoadMembers();
+             _ = LoadMembers();
         }
     }
 
@@ -209,10 +214,43 @@
         await OnChannelSelected.InvokeAsync(channel);
     }
 
+    private async Task StartDM(UserStatusDto member)
+    {
+        if (member.UserId == _currentUserId) return; 
+
+        if (Workspace == null) return;
+        
+        // Optimistic check
+        var existing = Channels.FirstOrDefault(c => c.Type == ChannelType.Direct && c.Name == member.Username);
+        if (existing != null)
+        {
+            await SelectChannel(existing);
+            return;
+        }
+
+        var channel = await ChannelService.StartDirectMessageAsync(Workspace.Id, member.UserId);
+        if (channel != null)
+        {
+            if (!Channels.Any(c => c.Id == channel.Id))
+            {
+                Channels.Add(channel);
+            }
+            await SelectChannel(channel);
+        }
+    }
+    
+    private string GetMemberStatus(string username)
+    {
+        var member = Members.FirstOrDefault(m => m.Username == username);
+        return member?.Status.ToLower() ?? "offline";
+    }
+
     private void OpenCreateModal()
     {
         CreateModal?.Open();
     }
+    
+    // OpenStartDMModal removed
 
     private void OpenWorkspaceSettings()
     {
@@ -221,13 +259,16 @@
 
     private async Task OnChannelCreated(ChannelDto newChannel)
     {
-        Channels.Add(newChannel);
+        // Check if exists
+        if (!Channels.Any(c => c.Id == newChannel.Id))
+        {
+            Channels.Add(newChannel);
+        }
         await SelectChannel(newChannel);
     }
 
     private async Task OnWorkspaceChanged()
     {
-        // Reload workspace data when it changes (rename, ownership transfer, etc.)
         await CheckOwnership();
         await LoadMembers();
         StateHasChanged();

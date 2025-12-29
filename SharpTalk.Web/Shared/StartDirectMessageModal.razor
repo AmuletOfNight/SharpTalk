@@ -1,0 +1,159 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject WorkspaceService WorkspaceService
+@inject ChannelService ChannelService
+@inject UrlUtilityService UrlUtilityService
+
+@if (Show)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Direct Message</h5>
+                    <button type="button" class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" placeholder="Search users..." 
+                               @bind="searchTerm" @bind:event="oninput" />
+                    </div>
+                    
+                    <div class="list-group user-select-list">
+                        @if (isLoading)
+                        {
+                            <div class="text-center p-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            var filteredUsers = FilteredUsers;
+                            @if (!filteredUsers.Any())
+                            {
+                                <div class="text-muted text-center p-3">No users found</div>
+                            }
+                            else
+                            {
+                                @foreach (var user in filteredUsers)
+                                {
+                                    <button class="list-group-item list-group-item-action d-flex align-items-center"
+                                            @onclick="() => StartDM(user)">
+                                        <div class="member-avatar-wrapper me-3">
+                                            <img src="@UrlUtilityService.GetAvatarUrl(user.AvatarUrl, "s")" 
+                                                 class="member-avatar-list @(user.Status.ToLower())" 
+                                                 alt="@user.Username" />
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">@user.Username</div>
+                                            <!-- <small class="text-muted">@user.Email</small> -->
+                                        </div>
+                                    </button>
+                                }
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int WorkspaceId { get; set; }
+
+    [Parameter]
+    public EventCallback<ChannelDto> OnChannelCreated { get; set; }
+    
+    [Inject] AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+
+    private bool Show = false;
+    private bool isLoading = false;
+    private List<UserStatusDto> Users = new List<UserStatusDto>();
+    private string searchTerm = "";
+    private int currentUserId;
+
+    private IEnumerable<UserStatusDto> FilteredUsers => 
+        string.IsNullOrWhiteSpace(searchTerm) 
+            ? Users 
+            : Users.Where(u => u.Username.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+
+    public async Task Open()
+    {
+        Show = true;
+        searchTerm = "";
+        
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userIdStr = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdStr, out int userId))
+        {
+            currentUserId = userId;
+        }
+
+        await LoadUsers();
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        Show = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        try
+        {
+            List<UserStatusDto> allUsersInfo = new List<UserStatusDto>();
+            
+            if (WorkspaceId > 0)
+            {
+                allUsersInfo = await WorkspaceService.GetWorkspaceMembersAsync(WorkspaceId);
+            }
+            else
+            {
+                // Global mode: Fetch from all workspaces
+                var workspaces = await WorkspaceService.GetMyWorkspacesAsync();
+                foreach (var ws in workspaces)
+                {
+                    var members = await WorkspaceService.GetWorkspaceMembersAsync(ws.Id);
+                    allUsersInfo.AddRange(members);
+                }
+            }
+            
+            // Filter out self and duplicate users
+            Users = allUsersInfo
+                .Where(u => u.UserId != currentUserId)
+                .GroupBy(u => u.UserId)
+                .Select(g => g.First())
+                .ToList();
+        }
+        catch (Exception)
+        {
+            // Handle error
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task StartDM(UserStatusDto user)
+    {
+        isLoading = true;
+        var wsId = WorkspaceId > 0 ? (int?)WorkspaceId : null;
+        var channel = await ChannelService.StartDirectMessageAsync(wsId, user.UserId);
+        isLoading = false;
+        
+        if (channel != null)
+        {
+            await OnChannelCreated.InvokeAsync(channel);
+            Close();
+        }
+    }
+}

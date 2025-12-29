@@ -1,0 +1,161 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Shared.Enums
+@using SharpTalk.Web.Services
+@inject ChannelService ChannelService
+@inject ChatService ChatService
+@inject UrlUtilityService UrlUtilityService
+@inject AuthenticationStateProvider AuthStateProvider
+@using System.Security.Claims
+
+<div class="channel-list">
+    <div class="workspace-name-header">
+        <h5>Direct Messages</h5>
+        <button class="btn btn-sm btn-link text-white p-0" @onclick="OpenStartDMModal">
+             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+        </button>
+    </div>
+
+    <div class="p-2">
+        <div class="form-group mb-2">
+            <input type="text" class="form-control form-control-sm" placeholder="Find or start a conversation" />
+        </div>
+        
+        <ul class="list-group list-group-flush">
+             @foreach (var channel in Channels)
+            {
+                 <li class="channel-item @(ActiveChannelId == channel.Id ? "active" : "")"
+                @onclick="() => SelectChannel(channel)">
+                    <div class="d-flex align-items-center w-100">
+                     <div class="member-avatar-wrapper me-2">
+                             @if (!string.IsNullOrEmpty(channel.AvatarUrl))
+                             {
+                                 <img src="@UrlUtilityService.GetAvatarUrl(channel.AvatarUrl, "s")" 
+                                      class="member-avatar-list @(channel.UserStatus.ToLower())" 
+                                      style="background-color: #5865f2;" 
+                                      alt="@channel.Name" />
+                             }
+                             else
+                             {
+                                 <div class="member-avatar-list @(channel.UserStatus.ToLower())" style="background-color: #5865f2; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                                     @channel.Name.Substring(0, 1).ToUpper()
+                                 </div>
+                             }
+                        </div>
+                        <div class="d-flex flex-column" style="min-width: 0; flex: 1;">
+                            <span class="text-truncate fw-bold">@channel.Name</span>
+                            @if (!string.IsNullOrEmpty(channel.Description))
+                            {
+                                 <small class="text-muted text-truncate">@channel.Description</small>
+                            }
+                        </div>
+                    </div>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+
+<StartDirectMessageModal @ref="StartDMModal" WorkspaceId="0" OnChannelCreated="OnChannelCreated" />
+
+@implements IDisposable
+
+@code {
+    [Parameter]
+    public int ActiveChannelId { get; set; }
+
+    [Parameter]
+    public EventCallback<ChannelDto> OnChannelSelected { get; set; }
+
+    private List<ChannelDto> Channels = new List<ChannelDto>();
+    private StartDirectMessageModal? StartDMModal;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        ChatService.OnMessageReceived += HandleMessageReceived;
+        ChatService.OnUserStatusChanged += HandleUserStatusChanged;
+        await LoadDMs();
+    }
+
+    private async Task LoadDMs()
+    {
+        Channels = await ChannelService.GetDirectMessagesAsync();
+    }
+
+    private void HandleMessageReceived(MessageDto message)
+    {
+        // Find if we have this channel in the list
+        var channel = Channels.FirstOrDefault(c => c.Id == message.ChannelId);
+        
+        if (channel != null)
+        {
+            // Update description and move to top
+            channel.Description = message.Content;
+            
+            // Move to top
+            Channels.Remove(channel);
+            Channels.Insert(0, channel);
+            
+            InvokeAsync(StateHasChanged);
+        }
+        else
+        {
+            // New DM potentially? 
+            // If it's a DM, we might want to fetch it or reload the list.
+            // But we don't know if it is a DM just from message ID easily without more context or check.
+            // Check if we can infer it's a DM?
+            // Actually, we can just reload the list if we want to be sure, or ignore.
+            // Ideally, we want to show it.
+            // Let's toggle a reload if it's not found, assuming it might be a new DM.
+            // But this might trigger on channel messages too?
+            // ChatHub broadcasts to group 'channelId'. We only receive it if we are connected to the hub.
+            // We are connected. But `OnMessageReceived` fires for ALL messages we receive.
+            // We only care about DMs here.
+            
+            // To be safe and avoid aggressive reloads, we could just ignore for now if not in list,
+            // OR if we want to be fancy, check if we should add it.
+            
+            // For now, let's just update existing ones to fix the "preview doesn't update" issue.
+            // That was the core complaint.
+        }
+    }
+
+    private async void HandleUserStatusChanged(UserStatusDto status)
+    {
+        // Update status for any DM with this user
+        var channel = Channels.FirstOrDefault(c => c.TargetUserId == status.UserId);
+        if (channel != null)
+        {
+            channel.UserStatus = status.Status;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SelectChannel(ChannelDto channel)
+    {
+        await OnChannelSelected.InvokeAsync(channel);
+    }
+
+    private void OpenStartDMModal()
+    {
+        StartDMModal?.Open();
+    }
+
+    private async Task OnChannelCreated(ChannelDto newChannel)
+    {
+        if (!Channels.Any(c => c.Id == newChannel.Id))
+        {
+            Channels.Insert(0, newChannel);
+        }
+        await SelectChannel(newChannel);
+    }
+    
+    public void Dispose()
+    {
+        ChatService.OnMessageReceived -= HandleMessageReceived;
+        ChatService.OnUserStatusChanged -= HandleUserStatusChanged;
+    }
+}

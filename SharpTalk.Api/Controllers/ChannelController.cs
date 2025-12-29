@@ -5,6 +5,8 @@ using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
 using System.Security.Claims;
+using SharpTalk.Shared.Enums;
+using StackExchange.Redis;
 
 namespace SharpTalk.Api.Controllers;
 
@@ -14,10 +16,12 @@ namespace SharpTalk.Api.Controllers;
 public class ChannelController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IDatabase _redis;
 
-    public ChannelController(ApplicationDbContext context)
+    public ChannelController(ApplicationDbContext context, IConnectionMultiplexer redis)
     {
         _context = context;
+        _redis = redis.GetDatabase();
     }
 
     [HttpGet("{workspaceId}")]
@@ -40,9 +44,12 @@ public class ChannelController : ControllerBase
             {
                 Id = c.Id,
                 WorkspaceId = c.WorkspaceId,
-                Name = c.Name,
-                Description = c.Description,
-                IsPrivate = c.IsPrivate
+                Name = c.Type == ChannelType.Direct
+                    ? (c.Members.Where(m => m.UserId != userId).Select(m => m.User.Username).FirstOrDefault() ?? "Unknown")
+                    : c.Name,
+                Description = c.Description ?? string.Empty,
+                IsPrivate = c.IsPrivate,
+                Type = c.Type
             })
             .ToListAsync();
 
@@ -75,7 +82,8 @@ public class ChannelController : ControllerBase
             WorkspaceId = request.WorkspaceId,
             Name = request.Name,
             Description = request.Description,
-            IsPrivate = request.IsPrivate
+            IsPrivate = request.IsPrivate,
+            Type = request.IsPrivate ? ChannelType.Private : ChannelType.Public
         };
 
         _context.Channels.Add(channel);
@@ -96,7 +104,234 @@ public class ChannelController : ControllerBase
             WorkspaceId = channel.WorkspaceId,
             Name = channel.Name,
             Description = channel.Description,
-            IsPrivate = channel.IsPrivate
+            IsPrivate = channel.IsPrivate,
+            Type = channel.Type
         });
+    }
+
+    [HttpGet("dms")]
+    public async Task<ActionResult<List<ChannelDto>>> GetDirectMessages()
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+
+        // Fetch all DMs involving the user (Global + Legacy)
+        var rawChannels = await _context.Channels
+            .Include(c => c.Members)
+            .ThenInclude(m => m.User)
+            .Where(c => c.Type == ChannelType.Direct && c.Members.Any(m => m.UserId == userId))
+            .Select(c => new
+            {
+                Channel = c,
+                TargetMember = c.Members.FirstOrDefault(m => m.UserId != userId),
+                LastMessage = c.Messages.OrderByDescending(m => m.Timestamp).FirstOrDefault()
+            })
+            .ToListAsync();
+
+        if (!rawChannels.Any())
+        {
+            return Ok(new List<ChannelDto>());
+        }
+
+        // Get my workspace IDs
+        var myWorkspaceIds = (await _context.WorkspaceMembers
+            .Where(wm => wm.UserId == userId)
+            .Select(wm => wm.WorkspaceId)
+            .ToListAsync()).ToHashSet();
+
+        // Get all target user IDs
+        var targetUserIds = rawChannels
+            .Where(x => x.TargetMember != null)
+            .Select(x => x.TargetMember!.UserId)
+            .Distinct()
+            .ToList();
+
+        // Fetch workspace memberships for all target users
+        var targetMemberships = await _context.WorkspaceMembers
+            .Where(wm => targetUserIds.Contains(wm.UserId))
+            .Select(wm => new { wm.UserId, wm.WorkspaceId })
+            .ToListAsync();
+
+        var targetWorkspaceMap = targetMemberships
+            .GroupBy(wm => wm.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(wm => wm.WorkspaceId).ToHashSet());
+
+        // In-memory grouping to coalesce duplicates and calculate CanMessage
+        var groupedChannels = rawChannels
+            .Where(x => x.TargetMember != null)
+            .GroupBy(x => x.TargetMember!.UserId)
+            .Select(g =>
+            {
+                var best = g.OrderByDescending(x => x.LastMessage?.Timestamp)
+                            .ThenBy(x => x.Channel.WorkspaceId == null)
+                            .ThenByDescending(x => x.Channel.Id)
+                            .First();
+
+                var targetUserId = best.TargetMember!.UserId;
+                var canMessage = false;
+
+                // Check workspace overlap
+                if (targetWorkspaceMap.TryGetValue(targetUserId, out var targetWorkspaces))
+                {
+                    canMessage = myWorkspaceIds.Overlaps(targetWorkspaces);
+                }
+
+                return new ChannelDto
+                {
+                    Id = best.Channel.Id,
+                    WorkspaceId = best.Channel.WorkspaceId,
+                    Name = best.TargetMember!.User.Username,
+                    AvatarUrl = best.TargetMember!.User.AvatarUrl,
+                    Description = best.LastMessage?.Content ?? string.Empty,
+                    IsPrivate = true,
+                    Type = ChannelType.Direct,
+                    CanMessage = canMessage,
+                    UserStatus = best.TargetMember!.User.Status, // Will be corrected below
+                    TargetUserId = targetUserId
+                };
+            })
+            .OrderByDescending(c => c.WorkspaceId == null)
+            .ToList();
+
+        // Correct the UserStatus by checking Redis for actual online status
+        foreach (var channel in groupedChannels)
+        {
+            if (channel.TargetUserId.HasValue)
+            {
+                channel.UserStatus = await GetEffectiveStatus(channel.TargetUserId.Value, channel.UserStatus);
+            }
+        }
+
+        return Ok(groupedChannels);
+    }
+
+    [HttpPost("dm")]
+    public async Task<ActionResult<ChannelDto>> StartDirectMessage(CreateDirectMessageRequest request)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+
+        // If WorkspaceId is provided, we can use it to verify they are in the same workspace,
+        // but the resulting DM will be global (WorkspaceId = null).
+        // Or we just check if they share *any* workspace.
+
+        bool canMessage = false;
+
+        if (request.WorkspaceId.HasValue)
+        {
+            var isMember = await _context.WorkspaceMembers
+               .AnyAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == userId);
+
+            var targetIsMember = await _context.WorkspaceMembers
+               .AnyAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == request.TargetUserId);
+
+            if (isMember && targetIsMember) canMessage = true;
+        }
+        else
+        {
+            // Check if they share ANY workspace
+            var myWorkspaces = _context.WorkspaceMembers.Where(wm => wm.UserId == userId).Select(wm => wm.WorkspaceId);
+            var targetWorkspaces = _context.WorkspaceMembers.Where(wm => wm.UserId == request.TargetUserId).Select(wm => wm.WorkspaceId);
+
+            if (await myWorkspaces.Intersect(targetWorkspaces).AnyAsync())
+            {
+                canMessage = true;
+            }
+        }
+
+        if (!canMessage) return BadRequest("You can only DM users you share a workspace with.");
+
+        // Check for ANY existing DM (Global OR Legacy)
+        var existingChannel = await _context.Channels
+            .Include(c => c.Members)
+            .Where(c => c.Type == ChannelType.Direct
+                     && c.Members.Any(m => m.UserId == userId)
+                     && c.Members.Any(m => m.UserId == request.TargetUserId))
+            // Prefer Global if multiple exist, or just take first found
+            .OrderByDescending(c => c.WorkspaceId == null)
+            .FirstOrDefaultAsync();
+
+        // Resolve name for existing DM (the other user)
+        var targetUser = await _context.Users
+            .Where(u => u.Id == request.TargetUserId)
+            .Select(u => new { u.Username, u.AvatarUrl, u.Status })
+            .FirstOrDefaultAsync();
+
+        var targetUsername = targetUser?.Username ?? "Unknown";
+        var targetAvatar = targetUser?.AvatarUrl;
+
+        if (existingChannel != null)
+        {
+            // Get last message for description if possible, or empty
+            var lastMsg = await _context.Messages
+                .Where(m => m.ChannelId == existingChannel.Id)
+                .OrderByDescending(m => m.Timestamp)
+                .Select(m => m.Content)
+                .FirstOrDefaultAsync();
+
+            return Ok(new ChannelDto
+            {
+                Id = existingChannel.Id,
+                WorkspaceId = existingChannel.WorkspaceId,
+                Name = targetUsername,
+                AvatarUrl = targetAvatar,
+                Description = lastMsg ?? string.Empty,
+                IsPrivate = true,
+                Type = ChannelType.Direct,
+                CanMessage = canMessage, // Computed earlier
+                UserStatus = await GetEffectiveStatus(request.TargetUserId, targetUser?.Status ?? "Offline"),
+                TargetUserId = request.TargetUserId
+            });
+        }
+
+        // Create new Global DM
+        var channel = new Channel
+        {
+            WorkspaceId = null, // Global
+            Name = "dm",
+            IsPrivate = true,
+            Type = ChannelType.Direct
+        };
+
+        _context.Channels.Add(channel);
+        await _context.SaveChangesAsync();
+
+        _context.ChannelMembers.AddRange(
+            new ChannelMember { ChannelId = channel.Id, UserId = userId },
+            new ChannelMember { ChannelId = channel.Id, UserId = request.TargetUserId }
+        );
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new ChannelDto
+        {
+            Id = channel.Id,
+            WorkspaceId = null,
+            Name = targetUsername,
+            AvatarUrl = targetAvatar,
+            Description = string.Empty,
+            IsPrivate = true,
+            Type = ChannelType.Direct,
+            CanMessage = canMessage,
+            UserStatus = await GetEffectiveStatus(request.TargetUserId, targetUser?.Status ?? "Offline"),
+            TargetUserId = request.TargetUserId
+        });
+    }
+
+    /// <summary>
+    /// Gets the effective status of a user by checking if they're actually online in Redis.
+    /// Returns their preferred status (Online/Away) if connected, otherwise "Offline".
+    /// </summary>
+    private async Task<string> GetEffectiveStatus(int userId, string preferredStatus)
+    {
+        // Check if user is in the online_users Redis set
+        var isOnline = await _redis.SetContainsAsync("online_users", userId);
+
+        // If they're not connected, they're offline regardless of their preference
+        if (!isOnline)
+        {
+            return "Offline";
+        }
+
+        // If they are connected, return their preferred status
+        return preferredStatus;
     }
 }

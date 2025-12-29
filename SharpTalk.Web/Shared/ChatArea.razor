@@ -1,5 +1,6 @@
 @using SharpTalk.Shared
 @using SharpTalk.Shared.DTOs
+@using SharpTalk.Shared.Enums
 @using SharpTalk.Web.Services
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
@@ -11,6 +12,41 @@
 @inject UrlUtilityService UrlUtilityService
 
 <div class="chat-area">
+    <div class="channel-header">
+        <div class="d-flex align-items-center">
+            @if (Channel != null)
+            {
+                @if (Channel.Type == ChannelType.Direct)
+                {
+                    @if (!string.IsNullOrEmpty(Channel.AvatarUrl))
+                    {
+                         <img src="@UrlUtilityService.GetAvatarUrl(Channel.AvatarUrl, "s")" 
+                              class="header-avatar @(Channel.UserStatus.ToLower()) me-2" 
+                              alt="@Channel.Name" />
+                    }
+                    else
+                    {
+                        <div class="header-avatar-placeholder @(Channel.UserStatus.ToLower()) me-2">
+                            @(string.IsNullOrEmpty(Channel.Name) ? "?" : Channel.Name.Substring(0, 1).ToUpper())
+                        </div>
+                    }
+                    <h5 class="mb-0">@Channel.Name</h5>
+                }
+                else
+                {
+                     <span class="text-muted me-2 fs-4">@((Channel.IsPrivate) ? "🔒" : "#")</span>
+                     <div>
+                        <h5 class="mb-0">@Channel.Name</h5>
+                        @if (!string.IsNullOrEmpty(Channel.Description))
+                        {
+                            <small class="text-muted">@Channel.Description</small>
+                        }
+                     </div>
+                }
+            }
+        </div>
+    </div>
+
     <div class="messages-list" id="messagesList">
         @foreach (var msg in Messages)
         {
@@ -105,24 +141,39 @@
                 <button type="button" @onclick="() => uploadErrorMessage = null" class="close-error">×</button>
             </div>
         }
-        <form @onsubmit="SendMessage">
-            <div class="chat-input-container">
-                <label class="attach-btn" title="Attach files">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                    </svg>
-                    <InputFile OnChange="HandleFileSelect" multiple accept="@string.Join(",", FileUploadConstants.AllowedMimeTypes)" />
-                </label>
-                <input type="text" class="message-input-field" placeholder="Message #@(Channel?.Name ?? "Channel")" @bind="newMessage"
-                    @bind:event="oninput" />
-                <button type="submit" class="send-btn" title="Send message" disabled="@(!CanSendMessage())">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                </button>
+        @if (Channel != null && !Channel.CanMessage)
+        {
+             <div class="alert alert-warning m-2 d-flex align-items-center" role="alert">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2" viewBox="0 0 16 16">
+                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                </svg>
+                <div>
+                    You must be a part of at least one shared workspace to message with this person.
+                </div>
             </div>
-        </form>
+        }
+        else
+        {
+
+            <form @onsubmit="SendMessage">
+                <div class="chat-input-container">
+                    <label class="attach-btn" title="Attach files">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                        </svg>
+                        <InputFile OnChange="HandleFileSelect" multiple accept="@string.Join(",", FileUploadConstants.AllowedMimeTypes)" />
+                    </label>
+                    <input type="text" class="message-input-field" placeholder="Message #@(Channel?.Name ?? "Channel")" @bind="newMessage"
+                        @bind:event="oninput" />
+                    <button type="submit" class="send-btn" title="Send message" disabled="@(!CanSendMessage())">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        }
     </div>
 </div>
 
@@ -244,11 +295,23 @@
     private async void HandleUserStatusChanged(UserStatusDto status)
     {
         bool changed = false;
+        
+        // Update message avatars
         foreach (var msg in Messages.Where(m => m.UserId == status.UserId))
         {
             if (msg.UserStatus != status.Status)
             {
                 msg.UserStatus = status.Status;
+                changed = true;
+            }
+        }
+
+        // Update channel status if this is a DM with this user
+        if (Channel != null && Channel.Type == ChannelType.Direct && Channel.TargetUserId == status.UserId)
+        {
+            if (Channel.UserStatus != status.Status)
+            {
+                Channel.UserStatus = status.Status;
                 changed = true;
             }
         }
@@ -355,8 +418,22 @@
             // Only send the message if there's either text or at least one successful attachment
             if (!string.IsNullOrWhiteSpace(content) || attachmentIds.Any())
             {
-                await ChatService.SendMessageAsync(ChannelId, content, attachmentIds);
-                await ChatService.SendTypingIndicatorAsync(ChannelId, false);
+                try
+                {
+                    await ChatService.SendMessageAsync(ChannelId, content, attachmentIds);
+                    await ChatService.SendTypingIndicatorAsync(ChannelId, false);
+                }
+                catch (Exception ex)
+                {
+                    uploadErrorMessage = $"Error sending message: {ex.Message}";
+                    
+                    // Recover message text so user doesn't lose it
+                    if (string.IsNullOrEmpty(newMessage))
+                    {
+                        newMessage = content;
+                    }
+                    StateHasChanged();
+                }
             }
             StateHasChanged();
         }

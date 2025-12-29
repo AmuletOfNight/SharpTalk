@@ -53,14 +53,10 @@
             {
                 await JSRuntime.InvokeVoidAsync("downloadFile", dataUrl, Attachment.FileName);
             }
-            else
-            {
-                Console.WriteLine($"Failed to download attachment: {Attachment.FileName}");
-            }
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error downloading file: {ex.Message}");
+            // Download failed silently
         }
         finally
         {

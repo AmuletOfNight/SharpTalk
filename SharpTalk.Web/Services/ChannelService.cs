@@ -43,4 +43,24 @@ public class ChannelService
 
         return null;
     }
+
+    public async Task<ChannelDto?> StartDirectMessageAsync(int? workspaceId, int targetUserId)
+    {
+        await SetAuthHeader();
+        var request = new CreateDirectMessageRequest { WorkspaceId = workspaceId, TargetUserId = targetUserId };
+        var response = await _httpClient.PostAsJsonAsync("api/channel/dm", request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<ChannelDto>();
+        }
+
+        return null;
+    }
+
+    public async Task<List<ChannelDto>> GetDirectMessagesAsync()
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<ChannelDto>>("api/channel/dms") ?? new List<ChannelDto>();
+    }
 }

@@ -6,6 +6,7 @@ using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
 using StackExchange.Redis;
 using System.Security.Claims;
+using SharpTalk.Shared.Enums;
 
 namespace SharpTalk.Api.Hubs;
 
@@ -72,11 +73,14 @@ public class ChatHub : Hub
         var channel = await _context.Channels.FindAsync(channelId);
         if (channel == null) return false;
 
-        // Must be in workspace
-        var inWorkspace = await _context.WorkspaceMembers
-            .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
+        // Must be in workspace if it belongs to one
+        if (channel.WorkspaceId.HasValue)
+        {
+            var inWorkspace = await _context.WorkspaceMembers
+                .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
 
-        if (!inWorkspace) return false;
+            if (!inWorkspace) return false;
+        }
 
         // If private, must be in ChannelMembers
         if (channel.IsPrivate)
@@ -150,7 +154,35 @@ public class ChatHub : Hub
         // [SECURITY] Re-verify membership (optional optimization: assume JoinChannel checked it, but safer to check or rely on DB constraints)
         // For performance, we might rely on the fact they are in the group, but saving to DB requires validation.
 
+
         if (!await IsUserInChannel(userId, channelId)) return;
+
+        // [SECURITY] Extra validation for Global DMs to ensure shared workspace
+        var channel = await _context.Channels.FindAsync(channelId); // Re-fetch or pass in? IsUserInChannel fetched it... 
+                                                                    // Optimization: Create a cached method or trust IsUserInChannel? 
+                                                                    // IsUserInChannel only checks MEMBERSHIP. We need to check SHARED WORKSPACE if it's a global DM.
+
+        if (channel != null && channel.WorkspaceId == null && channel.IsPrivate && channel.Type == ChannelType.Direct)
+        {
+            // Find the other member
+            var members = await _context.ChannelMembers
+                .Where(cm => cm.ChannelId == channelId)
+                .Select(cm => cm.UserId)
+                .ToListAsync();
+
+            var targetUserId = members.FirstOrDefault(id => id != userId);
+            if (targetUserId > 0)
+            {
+                // Check shared workspace
+                var myWorkspaces = _context.WorkspaceMembers.Where(wm => wm.UserId == userId).Select(wm => wm.WorkspaceId);
+                var targetWorkspaces = _context.WorkspaceMembers.Where(wm => wm.UserId == targetUserId).Select(wm => wm.WorkspaceId);
+
+                if (!await myWorkspaces.Intersect(targetWorkspaces).AnyAsync())
+                {
+                    throw new HubException("You must be a part of at least one shared workspace to message with this person.");
+                }
+            }
+        }
 
         // Get user avatar
         var user = await _context.Users.FindAsync(userId);

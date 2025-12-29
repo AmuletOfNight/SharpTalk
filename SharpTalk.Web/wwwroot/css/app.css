@@ -1,7 +1,7 @@
 /* Basic reset and fonts */
 html,
 body {
-    font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Inter', 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     background-color: #36393f;
     color: #dcddde;
     margin: 0;
@@ -9,6 +9,114 @@ body {
     height: 100%;
     overflow: hidden;
 }
+
+/* Channel Header / Title Bar */
+.channel-header {
+    padding: 12px 24px;
+    background-color: rgba(54, 57, 63, 0.95);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.channel-header h5 {
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.02em;
+}
+
+.channel-header .text-muted.fs-4 {
+    font-size: 1.5rem !important;
+    /* Make the hash/lock icon slightly larger/lighter */
+    font-weight: 300;
+    opacity: 0.6;
+    margin-right: 4px !important;
+}
+
+.channel-header small.text-muted {
+    display: block;
+    font-size: 0.85rem;
+    margin-top: 2px;
+    opacity: 0.7;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 600px;
+}
+
+.status-indicator-header {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #747f8d;
+    /* Default offline/unknown */
+    border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.header-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #36393f;
+    box-shadow: 0 0 0 2px transparent;
+    transition: all 0.2s ease;
+}
+
+.header-avatar.online {
+    box-shadow: 0 0 0 2px #3ba55c;
+}
+
+.header-avatar.away {
+    box-shadow: 0 0 0 2px #faa61a;
+}
+
+.header-avatar.offline {
+    box-shadow: 0 0 0 2px #747f8d;
+}
+
+.header-avatar-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #5865f2;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    border: 2px solid #36393f;
+    box-shadow: 0 0 0 2px transparent;
+    transition: all 0.2s ease;
+}
+
+.header-avatar-placeholder.online {
+    box-shadow: 0 0 0 2px #3ba55c;
+}
+
+.header-avatar-placeholder.away {
+    box-shadow: 0 0 0 2px #faa61a;
+}
+
+.header-avatar-placeholder.offline {
+    box-shadow: 0 0 0 2px #747f8d;
+}
+
+
 
 .text-muted {
     color: #b9bbbe !important;

@@ -45,6 +45,13 @@
                 </div>
             </div>
         }
+        else if (ActiveWorkspaceId == -2)
+        {
+            <div class="channel-sidebar">
+                <DirectMessagesList ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
+                                    OnChannelSelected="HandleChannelSelected" />
+            </div>
+        }
         else if (CurrentWorkspace != null)
         {
             <div class="channel-sidebar">
@@ -72,6 +79,15 @@
                 else if (CurrentChannel != null)
                 {
                     <ChatArea Channel="CurrentChannel" />
+                }
+                else if (ActiveWorkspaceId == -2 && CurrentChannel == null)
+                {
+                    <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                        <div class="text-center">
+                            <h4>Direct Messages</h4>
+                            <p>Select a conversation to start chatting</p>
+                        </div>
+                    </div>
                 }
                 else
                 {
@@ -170,9 +186,9 @@
                 }
             }
         }
-        catch (Exception ex)
+        catch
         {
-             Console.WriteLine($"Error loading data: {ex.Message}");
+             // Data loading error
         }
     }
 
@@ -185,7 +201,7 @@
     {
         ActiveWorkspaceId = workspaceId;
         
-        if (workspaceId == -1)
+        if (workspaceId == -1 || workspaceId == -2)
         {
             CurrentWorkspace = null;
             CurrentChannel = null;
@@ -258,7 +274,16 @@
 
     private async void HandleChannelSelected(ChannelDto channel)
     {
+        if (channel.WorkspaceId == null)
+        {
+            // Global DM
+            ActiveWorkspaceId = -2;
+            CurrentWorkspace = null;
+            await LocalStorage.RemoveItemAsync("lastWorkspaceId");
+        }
+        
         CurrentChannel = channel;
+        
         if (CurrentWorkspace != null)
         {
             await LocalStorage.SetItemAsync($"workspace_{CurrentWorkspace.Id}_lastChannel", channel.Id);
