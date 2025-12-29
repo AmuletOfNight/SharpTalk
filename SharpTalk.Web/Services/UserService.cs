@@ -20,7 +20,7 @@ public class UserService
     private UserInfo? _currentUser;
     public UserInfo? CurrentUser => _currentUser;
 
-    public UserService(HttpClient httpClient, ILocalStorageService localStorage, 
+    public UserService(HttpClient httpClient, ILocalStorageService localStorage,
         NavigationManager navigationManager, AuthenticationStateProvider authStateProvider)
     {
         _httpClient = httpClient;
@@ -172,12 +172,12 @@ public class UserService
         await _localStorage.RemoveItemAsync("authToken");
         await _localStorage.RemoveItemAsync("userInfo");
         _currentUser = null;
-        
+
         if (_authStateProvider is SharpTalk.Web.Auth.CustomAuthStateProvider customProvider)
         {
             customProvider.MarkUserAsLoggedOut();
         }
-        
+
         _navigationManager.NavigateTo("/login");
     }
 

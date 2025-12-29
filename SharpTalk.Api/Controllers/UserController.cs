@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SharpTalk.Api.Data;
-using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
 
 namespace SharpTalk.Api.Controllers;
@@ -60,7 +59,7 @@ public class UserController : ControllerBase
         }
 
         user.Status = userInfo.Status;
-        
+
         if (!string.IsNullOrEmpty(userInfo.AvatarUrl))
         {
             user.AvatarUrl = userInfo.AvatarUrl;
@@ -115,7 +114,7 @@ public class UserController : ControllerBase
 
         // Sanitize username to prevent path traversal attacks
         var sanitizedUsername = SanitizeUsername(user.Username);
-        
+
         // Create user-specific directory
         var userAvatarPath = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads", "avatars", sanitizedUsername);
         if (!Directory.Exists(userAvatarPath))
@@ -145,7 +144,7 @@ public class UserController : ControllerBase
             {
                 System.IO.File.Delete(oldPath);
             }
-            
+
             // Try to delete the user's avatar directory if it's empty
             var oldUserDir = Path.GetDirectoryName(oldPath);
             if (!string.IsNullOrEmpty(oldUserDir) && Directory.Exists(oldUserDir))
@@ -187,16 +186,16 @@ public class UserController : ControllerBase
                                  .Replace("<", "")
                                  .Replace(">", "")
                                  .Replace("|", "");
-        
+
         // Remove leading/trailing whitespace and dots
         sanitized = sanitized.Trim().Trim('.');
-        
+
         // If sanitization results in empty string, use a default
         if (string.IsNullOrEmpty(sanitized))
         {
             sanitized = "user";
         }
-        
+
         return sanitized;
     }
 

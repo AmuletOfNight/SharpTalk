@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SharpTalk.Api.Data;
 using StackExchange.Redis;
-using Microsoft.AspNetCore.StaticFiles;
 
 var builder = WebApplication.CreateBuilder(args);
 

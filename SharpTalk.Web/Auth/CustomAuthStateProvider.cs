@@ -2,7 +2,6 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
 using SharpTalk.Shared.DTOs;
 using System.Security.Claims;
-using System.Text;
 using System.Text.Json;
 
 namespace SharpTalk.Web.Auth;
@@ -43,7 +42,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
     public async Task MarkUserAsAuthenticatedWithUserInfo(string token, AuthResponse authResponse)
     {
         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        
+
         var userInfo = new UserInfo
         {
             Id = authResponse.Id,
@@ -52,9 +51,9 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
             AvatarUrl = authResponse.AvatarUrl,
             Status = "Online"
         };
-        
+
         await _localStorage.SetItemAsync("userInfo", JsonSerializer.Serialize(userInfo));
-        
+
         var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt"));
         var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
         NotifyAuthenticationStateChanged(authState);

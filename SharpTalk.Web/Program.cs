@@ -1,8 +1,8 @@
+using Blazored.LocalStorage;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using SharpTalk.Web;
-using Blazored.LocalStorage;
-using Microsoft.AspNetCore.Components.Authorization;
 using SharpTalk.Web.Auth;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
