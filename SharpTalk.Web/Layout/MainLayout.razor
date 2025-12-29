@@ -63,9 +63,9 @@
                         </div>
                     </div>
                 }
-                else if (CurrentChannelId.HasValue)
+                else if (CurrentChannel != null)
                 {
-                    <ChatArea ChannelId="CurrentChannelId.Value" />
+                    <ChatArea Channel="CurrentChannel" />
                 }
                 else
                 {
@@ -87,7 +87,7 @@
 
 @code {
     private WorkspaceDto? CurrentWorkspace;
-    private int? CurrentChannelId;
+    private ChannelDto? CurrentChannel;
     private bool IsLoading = true;
     private bool IsAuthenticated = false;
 
@@ -133,13 +133,13 @@
     private void HandleWorkspaceSelected(WorkspaceDto workspace)
     {
         CurrentWorkspace = workspace;
-        CurrentChannelId = null; // Reset channel when workspace changes
+        CurrentChannel = null; // Reset channel when workspace changes
         StateHasChanged();
     }
 
-    private void HandleChannelSelected(int channelId)
+    private void HandleChannelSelected(ChannelDto channel)
     {
-        CurrentChannelId = channelId;
+        CurrentChannel = channel;
         StateHasChanged();
     }
 }

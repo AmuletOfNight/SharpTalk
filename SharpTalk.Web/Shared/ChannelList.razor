@@ -55,7 +55,7 @@
             @foreach (var channel in Channels)
             {
                 <li class="channel-item @(selectedChannelId == channel.Id ? "active" : "")"
-            @onclick="() => SelectChannel(channel.Id)">
+            @onclick="() => SelectChannel(channel)">
                     <span class="channel-hash">#</span> @channel.Name
                 </li>
             }
@@ -88,7 +88,7 @@
     public WorkspaceDto? Workspace { get; set; }
 
     [Parameter]
-    public EventCallback<int> OnChannelSelected { get; set; }
+    public EventCallback<ChannelDto> OnChannelSelected { get; set; }
 
     private List<ChannelDto> Channels = new List<ChannelDto>();
     private List<UserStatusDto> Members = new List<UserStatusDto>();
@@ -119,7 +119,7 @@
             // Auto-select the first channel if available
             if (Channels.Any())
             {
-                await SelectChannel(Channels.First().Id);
+                await SelectChannel(Channels.First());
             }
             else
             {
@@ -173,10 +173,10 @@
         }
     }
 
-    private async Task SelectChannel(int id)
+    private async Task SelectChannel(ChannelDto channel)
     {
-        selectedChannelId = id;
-        await OnChannelSelected.InvokeAsync(id);
+        selectedChannelId = channel.Id;
+        await OnChannelSelected.InvokeAsync(channel);
     }
 
     private void OpenCreateModal()
@@ -192,7 +192,7 @@
     private async Task OnChannelCreated(ChannelDto newChannel)
     {
         Channels.Add(newChannel);
-        await SelectChannel(newChannel.Id);
+        await SelectChannel(newChannel);
     }
 
     private async Task OnWorkspaceChanged()

@@ -113,7 +113,7 @@
                     </svg>
                     <InputFile OnChange="HandleFileSelect" multiple accept="@string.Join(",", FileUploadConstants.AllowedMimeTypes)" />
                 </label>
-                <input type="text" class="message-input-field" placeholder="Message #Channel" @bind="newMessage"
+                <input type="text" class="message-input-field" placeholder="Message #@(Channel?.Name ?? "Channel")" @bind="newMessage"
                     @bind:event="oninput" />
                 <button type="submit" class="send-btn" title="Send message" disabled="@(!CanSendMessage())">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -142,7 +142,9 @@
 
 @code {
     [Parameter]
-    public int ChannelId { get; set; }
+    public ChannelDto? Channel { get; set; }
+
+    private int ChannelId => Channel?.Id ?? 0;
 
     private List<MessageDto> Messages = new List<MessageDto>();
     private string _newMessage = string.Empty;
