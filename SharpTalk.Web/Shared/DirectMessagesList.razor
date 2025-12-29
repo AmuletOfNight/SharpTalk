@@ -103,23 +103,8 @@
         }
         else
         {
-            // New DM potentially? 
-            // If it's a DM, we might want to fetch it or reload the list.
-            // But we don't know if it is a DM just from message ID easily without more context or check.
-            // Check if we can infer it's a DM?
-            // Actually, we can just reload the list if we want to be sure, or ignore.
-            // Ideally, we want to show it.
-            // Let's toggle a reload if it's not found, assuming it might be a new DM.
-            // But this might trigger on channel messages too?
-            // ChatHub broadcasts to group 'channelId'. We only receive it if we are connected to the hub.
-            // We are connected. But `OnMessageReceived` fires for ALL messages we receive.
-            // We only care about DMs here.
-            
-            // To be safe and avoid aggressive reloads, we could just ignore for now if not in list,
-            // OR if we want to be fancy, check if we should add it.
-            
-            // For now, let's just update existing ones to fix the "preview doesn't update" issue.
-            // That was the core complaint.
+            // Channel not found in DMs list - could be a workspace channel or a new DM
+            // For now, we only update existing DMs to avoid aggressive reloads
         }
     }
 

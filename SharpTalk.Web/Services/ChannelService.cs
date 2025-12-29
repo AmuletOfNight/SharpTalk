@@ -63,4 +63,16 @@ public class ChannelService
         await SetAuthHeader();
         return await _httpClient.GetFromJsonAsync<List<ChannelDto>>("api/channel/dms") ?? new List<ChannelDto>();
     }
+
+    public async Task<ChannelDto?> CheckExistingGlobalDMAsync(int targetUserId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.GetAsync($"api/channel/dm/check/{targetUserId}");
+        
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<ChannelDto?>();
+        }
+        return null;
+    }
 }

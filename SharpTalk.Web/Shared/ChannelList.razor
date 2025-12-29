@@ -182,6 +182,7 @@
     {
         if (Workspace != null)
         {
+            // Load workspace channels (DMs are excluded - they're only in the global DMs list)
             Channels = await ChannelService.GetChannelsAsync(Workspace.Id);
         }
     }
@@ -216,25 +217,24 @@
 
     private async Task StartDM(UserStatusDto member)
     {
-        if (member.UserId == _currentUserId) return; 
+        if (member.UserId == _currentUserId) return;
 
         if (Workspace == null) return;
         
-        // Optimistic check
-        var existing = Channels.FirstOrDefault(c => c.Type == ChannelType.Direct && c.Name == member.Username);
-        if (existing != null)
+        // Check for existing global DM before creating a new one
+        var globalDM = await ChannelService.CheckExistingGlobalDMAsync(member.UserId);
+        
+        if (globalDM != null && globalDM.Id > 0)
         {
-            await SelectChannel(existing);
+            await SelectChannel(globalDM);
             return;
         }
 
+        // No existing DM found, create a new one
         var channel = await ChannelService.StartDirectMessageAsync(Workspace.Id, member.UserId);
+        
         if (channel != null)
         {
-            if (!Channels.Any(c => c.Id == channel.Id))
-            {
-                Channels.Add(channel);
-            }
             await SelectChannel(channel);
         }
     }

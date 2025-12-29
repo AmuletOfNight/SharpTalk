@@ -38,15 +38,16 @@ public class ChannelController : ControllerBase
             return Forbid();
         }
 
+        // Exclude DM channels from workspace list - DMs should only be accessible via global DMs list
         var channels = await _context.Channels
-            .Where(c => c.WorkspaceId == workspaceId && (!c.IsPrivate || _context.ChannelMembers.Any(cm => cm.ChannelId == c.Id && cm.UserId == userId)))
+            .Where(c => c.WorkspaceId == workspaceId
+                     && c.Type != ChannelType.Direct  // Exclude DM channels
+                     && (!c.IsPrivate || _context.ChannelMembers.Any(cm => cm.ChannelId == c.Id && cm.UserId == userId)))
             .Select(c => new ChannelDto
             {
                 Id = c.Id,
                 WorkspaceId = c.WorkspaceId,
-                Name = c.Type == ChannelType.Direct
-                    ? (c.Members.Where(m => m.UserId != userId).Select(m => m.User.Username).FirstOrDefault() ?? "Unknown")
-                    : c.Name,
+                Name = c.Name,
                 Description = c.Description ?? string.Empty,
                 IsPrivate = c.IsPrivate,
                 Type = c.Type
@@ -239,14 +240,15 @@ public class ChannelController : ControllerBase
 
         if (!canMessage) return BadRequest("You can only DM users you share a workspace with.");
 
-        // Check for ANY existing DM (Global OR Legacy)
+        // Check for ANY existing DM - STRONGLY prefer Global DMs (WorkspaceId = null)
+        // to ensure users have a single unified DM conversation regardless of where they start it
         var existingChannel = await _context.Channels
             .Include(c => c.Members)
             .Where(c => c.Type == ChannelType.Direct
                      && c.Members.Any(m => m.UserId == userId)
                      && c.Members.Any(m => m.UserId == request.TargetUserId))
-            // Prefer Global if multiple exist, or just take first found
-            .OrderByDescending(c => c.WorkspaceId == null)
+            .OrderByDescending(c => c.WorkspaceId == null)  // Global DMs first
+            .ThenByDescending(c => c.Id)  // Newest first
             .FirstOrDefaultAsync();
 
         // Resolve name for existing DM (the other user)
@@ -313,6 +315,54 @@ public class ChannelController : ControllerBase
             CanMessage = canMessage,
             UserStatus = await GetEffectiveStatus(request.TargetUserId, targetUser?.Status ?? "Offline"),
             TargetUserId = request.TargetUserId
+        });
+    }
+
+    /// <summary>
+    /// Check if a global DM exists with the specified target user
+    /// </summary>
+    [HttpGet("dm/check/{targetUserId}")]
+    public async Task<ActionResult<ChannelDto?>> CheckExistingDM(int targetUserId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+
+        // Find existing global DM (WorkspaceId = null) with this user
+        var existingChannel = await _context.Channels
+            .Include(c => c.Members)
+            .ThenInclude(m => m.User)
+            .Where(c => c.Type == ChannelType.Direct
+                     && c.WorkspaceId == null  // Only global DMs
+                     && c.Members.Any(m => m.UserId == userId)
+                     && c.Members.Any(m => m.UserId == targetUserId))
+            .Select(c => new
+            {
+                Channel = c,
+                TargetMember = c.Members.FirstOrDefault(m => m.UserId != userId),
+                LastMessage = c.Messages.OrderByDescending(m => m.Timestamp).FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+
+        if (existingChannel == null || existingChannel.TargetMember == null)
+        {
+            return Ok(new ChannelDto());
+        }
+
+        var targetUser = existingChannel.TargetMember.User;
+        var channel = existingChannel.Channel;
+        var lastMsg = existingChannel.LastMessage;
+
+        return Ok(new ChannelDto
+        {
+            Id = channel.Id,
+            WorkspaceId = null,
+            Name = targetUser.Username,
+            AvatarUrl = targetUser.AvatarUrl,
+            Description = lastMsg?.Content ?? string.Empty,
+            IsPrivate = true,
+            Type = ChannelType.Direct,
+            CanMessage = true,
+            UserStatus = await GetEffectiveStatus(targetUserId, targetUser.Status),
+            TargetUserId = targetUserId
         });
     }
 
