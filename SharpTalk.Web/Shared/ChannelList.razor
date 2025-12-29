@@ -10,7 +10,8 @@
     <ul class="list-group list-group-flush">
         @foreach (var channel in Channels)
         {
-            <li class="list-group-item channel-item">
+            <li class="list-group-item channel-item @(selectedChannelId == channel.Id ? "active" : "")"
+            @onclick="() => SelectChannel(channel.Id)">
                 <span class="channel-hash">#</span> @channel.Name
             </li>
         }
@@ -23,20 +24,31 @@
     [Parameter]
     public int WorkspaceId { get; set; }
 
+    [Parameter]
+    public EventCallback<int> OnChannelSelected { get; set; }
+
     private List<ChannelDto> Channels = new List<ChannelDto>();
     private CreateChannelModal? CreateModal;
+    private int selectedChannelId;
 
     protected override async Task OnParametersSetAsync()
     {
         if (WorkspaceId > 0)
         {
             await LoadChannels();
+            selectedChannelId = 0; // Reset selection on workspace change
         }
     }
 
     private async Task LoadChannels()
     {
         Channels = await ChannelService.GetChannelsAsync(WorkspaceId);
+    }
+
+    private async Task SelectChannel(int id)
+    {
+        selectedChannelId = id;
+        await OnChannelSelected.InvokeAsync(id);
     }
 
     private void OpenCreateModal()
@@ -47,5 +59,6 @@
     private async Task OnChannelCreated(ChannelDto newChannel)
     {
         Channels.Add(newChannel);
+        await SelectChannel(newChannel.Id);
     }
 }

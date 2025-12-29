@@ -21,27 +21,30 @@ main {
     align-items: center;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
-    }
+.top-row ::deep a,
+.top-row ::deep .btn-link {
+    white-space: nowrap;
+    margin-left: 1.5rem;
+    text-decoration: none;
+}
 
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
-        text-decoration: underline;
-    }
+.top-row ::deep a:hover,
+.top-row ::deep .btn-link:hover {
+    text-decoration: underline;
+}
 
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+.top-row ::deep a:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 @media (max-width: 640.98px) {
     .top-row {
         justify-content: space-between;
     }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
+    .top-row ::deep a,
+    .top-row ::deep .btn-link {
         margin-left: 0;
     }
 }
@@ -56,7 +59,8 @@ main {
     .sidebar {
         width: 72px;
         height: 100vh;
-        position: relative; /* Remove sticky, flex container handles it */
+        position: relative;
+        /* Remove sticky, flex container handles it */
         background-color: #202225;
         z-index: 10;
         display: flex;
@@ -91,8 +95,25 @@ main {
         width: 0;
     }
 
-    .top-row, article {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
+    .top-row,
+    article {
+        /* Remove default padding to allow partials to control it */
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    main {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+
+    .content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding-top: 0 !important;
+        /* override app.css */
     }
 }

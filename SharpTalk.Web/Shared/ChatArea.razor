@@ -1,0 +1,84 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@implements IAsyncDisposable
+@inject ChatService ChatService
+@inject IJSRuntime JSRuntime
+
+<div class="chat-area">
+    <div class="messages-list" id="messagesList">
+        @foreach (var msg in Messages)
+        {
+            <div class="message-item">
+                <span class="message-author">@msg.Username</span>
+                <span class="message-timestamp">@msg.Timestamp.ToLocalTime().ToString("t")</span>
+                <div class="message-content">@msg.Content</div>
+            </div>
+        }
+    </div>
+
+    <div class="message-input">
+        <form @onsubmit="SendMessage">
+            <input type="text" class="form-control" placeholder="Message #Channel" @bind="newMessage"
+                @bind:event="oninput" />
+        </form>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int ChannelId { get; set; }
+
+    private List<MessageDto> Messages = new List<MessageDto>();
+    private string newMessage = string.Empty;
+    private int _currentChannelId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ChatService.OnMessageReceived += HandleMessageReceived;
+        await ChatService.InitializeAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ChannelId != _currentChannelId)
+        {
+            if (_currentChannelId > 0)
+            {
+                await ChatService.LeaveChannelAsync(_currentChannelId);
+            }
+
+            _currentChannelId = ChannelId;
+            Messages.Clear(); // Clear messages from previous channel (until history is implemented)
+
+            await ChatService.JoinChannelAsync(ChannelId);
+        }
+    }
+
+    private void HandleMessageReceived(MessageDto message)
+    {
+        if (message.ChannelId == ChannelId)
+        {
+            Messages.Add(message);
+            StateHasChanged();
+            // Scroll to bottom?
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(newMessage))
+        {
+            await ChatService.SendMessageAsync(ChannelId, newMessage);
+            newMessage = string.Empty;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        ChatService.OnMessageReceived -= HandleMessageReceived;
+        if (_currentChannelId > 0)
+        {
+            await ChatService.LeaveChannelAsync(_currentChannelId);
+        }
+    }
+}
