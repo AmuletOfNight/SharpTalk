@@ -46,8 +46,8 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [x] Migrate to Blazor.LocalStorage (v9)
 
 ## Phase 2: The "Slack" Feel (Enhanced UX)
-- [ ] **Direct Messages**
-    - [ ] 1:1 DM support
+- [x] **Direct Messages**
+    - [x] 1:1 DM support (Global DMs across workspaces)
     - [ ] Group DM support
 - [x] **Presence & Indicators**
     - [x] Online/Offline Status (Connection tracking with Redis)
@@ -69,6 +69,10 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [ ] Move hardcoded values to appsettings.json
 
 ## Current Task
-- [ ] **Direct Messages**
-    - [ ] 1:1 DM support
+- [ ] **Group Direct Messages**
+    - [ ] Add `GroupDM` ChannelType enum value
+    - [ ] Create Group DM endpoint with shared workspace validation
+    - [ ] Create multi-select user modal in frontend
+    - [ ] Update DM list to display Group DMs with stacked avatars
+    - [ ] Add unit tests for Group DM functionality
 
