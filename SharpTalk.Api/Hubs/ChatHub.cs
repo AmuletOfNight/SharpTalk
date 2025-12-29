@@ -147,6 +147,10 @@ public class ChatHub : Hub
 
         if (!await IsUserInChannel(userId, channelId)) return;
 
+        // Get user avatar
+        var user = await _context.Users.FindAsync(userId);
+        var avatarUrl = user?.AvatarUrl;
+
         // Save to DB
         var message = new Message
         {
@@ -165,6 +169,7 @@ public class ChatHub : Hub
             ChannelId = channelId,
             UserId = userId,
             Username = username,
+            AvatarUrl = avatarUrl,
             Content = content,
             Timestamp = message.Timestamp
         };

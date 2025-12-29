@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SharpTalk.Api.Data;
 using StackExchange.Redis;
+using Microsoft.AspNetCore.StaticFiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,6 +77,21 @@ if (app.Environment.IsDevelopment())
 // app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
+
+// Configure secure static file serving
+var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRootPath),
+    RequestPath = "",
+    ServeUnknownFileTypes = false,
+    OnPrepareResponse = ctx =>
+    {
+        // Add security headers
+        ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+        ctx.Context.Response.Headers.Append("X-Frame-Options", "DENY");
+    }
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

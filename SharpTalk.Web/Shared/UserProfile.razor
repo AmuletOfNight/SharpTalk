@@ -1,0 +1,98 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject UserService UserService
+
+<div class="user-profile-container">
+    <div class="user-profile" @onclick="ToggleDropdown">
+        <div class="user-avatar-wrapper">
+            <img src="@GetAvatarUrl(CurrentUser?.AvatarUrl)"
+                 class="user-avatar @(CurrentUser?.Status == "Online" ? "online" : CurrentUser?.Status == "Away" ? "away" : "")"
+                 alt="@CurrentUser?.Username" />
+        </div>
+        <div class="user-info">
+            <span class="username">@CurrentUser?.Username</span>
+            <span class="status-text">@GetStatusText()</span>
+        </div>
+        <span class="dropdown-arrow @(IsDropdownOpen ? "open" : "")">▼</span>
+    </div>
+
+    @if (IsDropdownOpen)
+    {
+        <div class="user-dropdown" @onclick:stopPropagation>
+            <button class="dropdown-item" @onclick="OpenSettings">
+                <span class="icon">⚙️</span> Settings
+            </button>
+            <button class="dropdown-item" @click="Logout">
+                <span class="icon">🚪</span> Logout
+            </button>
+        </div>
+    }
+</div>
+
+<UserSettingsModal @ref="SettingsModal" />
+
+@code {
+    private UserInfo? CurrentUser;
+    private bool IsDropdownOpen = false;
+    private UserSettingsModal? SettingsModal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserInfo();
+        UserService.OnUserInfoChanged += HandleUserInfoChanged;
+    }
+
+    private async Task LoadUserInfo()
+    {
+        CurrentUser = await UserService.GetCurrentUserAsync();
+        StateHasChanged();
+    }
+
+    private void HandleUserInfoChanged(UserInfo? userInfo)
+    {
+        CurrentUser = userInfo;
+        StateHasChanged();
+    }
+
+    private void ToggleDropdown()
+    {
+        IsDropdownOpen = !IsDropdownOpen;
+    }
+
+    private void OpenSettings()
+    {
+        IsDropdownOpen = false;
+        SettingsModal?.Open();
+    }
+
+    private async Task Logout()
+    {
+        IsDropdownOpen = false;
+        await UserService.LogoutAsync();
+    }
+
+    private string GetStatusText()
+    {
+        return CurrentUser?.Status switch
+        {
+            "Online" => "Online",
+            "Away" => "Away",
+            "Offline" => "Offline",
+            _ => "Online"
+        };
+    }
+
+    private string GetAvatarUrl(string? avatarUrl)
+    {
+        if (string.IsNullOrEmpty(avatarUrl) || avatarUrl.StartsWith("data:") || avatarUrl.StartsWith("http"))
+        {
+            return avatarUrl ?? "/images/default-avatar.svg";
+        }
+        return $"http://localhost:5298{avatarUrl}";
+    }
+
+    public void Dispose()
+    {
+        UserService.OnUserInfoChanged -= HandleUserInfoChanged;
+    }
+}

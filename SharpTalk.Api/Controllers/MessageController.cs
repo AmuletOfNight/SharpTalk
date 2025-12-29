@@ -59,6 +59,7 @@ public class MessageController : ControllerBase
                 ChannelId = m.ChannelId,
                 UserId = m.UserId,
                 Username = m.User.Username,
+                AvatarUrl = m.User.AvatarUrl,
                 Content = m.Content,
                 Timestamp = m.Timestamp
             })

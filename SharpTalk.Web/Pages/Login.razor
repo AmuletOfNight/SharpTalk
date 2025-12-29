@@ -56,7 +56,7 @@
         {
             var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
             await LocalStorage.SetItemAsync("authToken", authResponse.Token);
-            ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticated(authResponse.Token);
+            await ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticatedWithUserInfo(authResponse.Token, authResponse);
             Navigation.NavigateTo("/home");
         }
         else

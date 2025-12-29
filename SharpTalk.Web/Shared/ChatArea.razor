@@ -13,12 +13,17 @@
         {
             var isMine = msg.UserId == currentUserId;
             <div class='message-item @(isMine ? "message-mine" : "message-others")'>
-                <div class="message-info">
-                    <span class="message-author">@msg.Username</span>
-                    <span class="message-timestamp">@msg.Timestamp.ToLocalTime().ToString("t")</span>
-                </div>
-                <div class="bubble-container">
-                    <div class="message-content">@msg.Content</div>
+                <img src="@GetAvatarUrl(msg.AvatarUrl)"
+                     class="message-avatar"
+                     alt="@msg.Username" />
+                <div class="message-body">
+                    <div class="message-info">
+                        <span class="message-author">@msg.Username</span>
+                        <span class="message-timestamp">@msg.Timestamp.ToLocalTime().ToString("t")</span>
+                    </div>
+                    <div class="bubble-container">
+                        <div class="message-content">@msg.Content</div>
+                    </div>
                 </div>
             </div>
         }
@@ -170,6 +175,15 @@
             await ChatService.SendMessageAsync(ChannelId, content);
             await ChatService.SendTypingIndicatorAsync(ChannelId, false);
         }
+    }
+
+    private string GetAvatarUrl(string? avatarUrl)
+    {
+        if (string.IsNullOrEmpty(avatarUrl) || avatarUrl.StartsWith("data:") || avatarUrl.StartsWith("http"))
+        {
+            return avatarUrl ?? "/images/default-avatar.svg";
+        }
+        return $"http://localhost:5298{avatarUrl}";
     }
 
     public async ValueTask DisposeAsync()

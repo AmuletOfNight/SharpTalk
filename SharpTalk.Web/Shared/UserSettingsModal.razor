@@ -1,0 +1,206 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject UserService UserService
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div class="modal-content user-settings-modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>User Settings</h3>
+                <button class="close-btn" @onclick="Close">×</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Avatar Section -->
+                <div class="avatar-section">
+                    <div class="avatar-container">
+                        <img src="@(previewUrl ?? GetAvatarUrl(CurrentUser?.AvatarUrl))"
+                             class="avatar-preview"
+                             alt="Profile Avatar" />
+                        @if (isUploading)
+                        {
+                            <div class="avatar-loading">
+                                <div class="spinner-small"></div>
+                            </div>
+                        }
+                    </div>
+                    <div class="avatar-actions">
+                        <label class="btn-upload">
+                            Upload New Avatar
+                            <InputFile OnChange="HandleAvatarUpload" accept="image/jpeg,image/png,image/gif,image/webp" />
+                        </label>
+                        <small class="avatar-hint">JPG, PNG, GIF or WebP. Max 2MB.</small>
+                    </div>
+                </div>
+
+                <!-- Profile Info -->
+                <div class="form-section">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <InputText @bind-Value="username" class="form-control" disabled />
+                        <small class="form-hint">Username cannot be changed</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email</label>
+                        <InputText @bind-Value="email" class="form-control" disabled />
+                        <small class="form-hint">Email cannot be changed</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Status</label>
+                        <div class="status-options">
+                            <button type="button" class="status-option @(selectedStatus == "Online" ? "active online" : "")" @onclick="SelectOnline">
+                                <span class="status-dot online"></span>
+                                Online
+                            </button>
+                            <button type="button" class="status-option @(selectedStatus == "Away" ? "active away" : "")" @onclick="SelectAway">
+                                <span class="status-dot away"></span>
+                                Away
+                            </button>
+                            <button type="button" class="status-option @(selectedStatus == "Offline" ? "active offline" : "")" @onclick="SelectOffline">
+                                <span class="status-dot offline"></span>
+                                Offline
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-small"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>Save Changes</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsOpen = false;
+    private UserInfo? CurrentUser;
+    private string username = string.Empty;
+    private string email = string.Empty;
+    private string selectedStatus = "Online";
+    private string? previewUrl;
+    private bool isUploading = false;
+    private bool isSaving = false;
+
+    public void Open()
+    {
+        LoadCurrentUser();
+        IsOpen = true;
+    }
+
+    public void Close()
+    {
+        IsOpen = false;
+        previewUrl = null;
+    }
+
+    private async void LoadCurrentUser()
+    {
+        CurrentUser = await UserService.GetCurrentUserAsync();
+        if (CurrentUser != null)
+        {
+            username = CurrentUser.Username;
+            email = CurrentUser.Email;
+            selectedStatus = CurrentUser.Status;
+        }
+        StateHasChanged();
+    }
+
+    private void SelectOnline() => selectedStatus = "Online";
+    private void SelectAway() => selectedStatus = "Away";
+    private void SelectOffline() => selectedStatus = "Offline";
+
+    private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
+    {
+        if (e.File == null) return;
+
+        var file = e.File;
+        
+        // Validate file type
+        var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
+        if (!allowedTypes.Contains(file.ContentType.ToLower()))
+        {
+            return;
+        }
+
+        // Validate file size (max 2MB)
+        const int maxFileSize = 2 * 1024 * 1024;
+        if (file.Size > maxFileSize)
+        {
+            return;
+        }
+
+        // Show preview
+        var memoryStream = new MemoryStream();
+        await file.OpenReadStream(maxFileSize).CopyToAsync(memoryStream);
+        var bytes = memoryStream.ToArray();
+        previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+
+        // Upload
+        isUploading = true;
+        StateHasChanged();
+
+        var success = await UserService.UploadAvatarAsync(file);
+
+        isUploading = false;
+        
+        if (success)
+        {
+            previewUrl = null; // Clear preview to show actual uploaded avatar
+            CurrentUser = UserService.CurrentUser;
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task SaveSettings()
+    {
+        if (CurrentUser == null) return;
+
+        isSaving = true;
+        StateHasChanged();
+
+        var updatedUser = new UserInfo
+        {
+            Id = CurrentUser.Id,
+            Username = CurrentUser.Username,
+            Email = CurrentUser.Email,
+            AvatarUrl = CurrentUser.AvatarUrl,
+            Status = selectedStatus
+        };
+
+        var success = await UserService.UpdateUserInfoAsync(updatedUser);
+
+        isSaving = false;
+        
+        if (success)
+        {
+            Close();
+        }
+        
+        StateHasChanged();
+    }
+
+    private string GetAvatarUrl(string? avatarUrl)
+    {
+        if (string.IsNullOrEmpty(avatarUrl) || avatarUrl.StartsWith("data:") || avatarUrl.StartsWith("http"))
+        {
+            return avatarUrl ?? "/images/default-avatar.svg";
+        }
+        return $"http://localhost:5298{avatarUrl}";
+    }
+}
