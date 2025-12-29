@@ -117,3 +117,83 @@ main {
         /* override app.css */
     }
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 640.98px) {
+    .page {
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        padding-top: 56px; /* Account for mobile nav height */
+    }
+
+    .sidebar {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        opacity: 0;
+        pointer-events: none;
+        padding-top: 56px; /* Account for mobile nav height */
+        box-sizing: border-box;
+    }
+
+    .sidebar.mobile-visible {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .channel-sidebar {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 90;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        opacity: 0;
+        pointer-events: none;
+        padding-top: 56px; /* Account for mobile nav height */
+        box-sizing: border-box;
+    }
+
+    .channel-sidebar.mobile-visible {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    main {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        transform: translateX(100%);
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        opacity: 0;
+        pointer-events: none;
+        padding-top: 56px; /* Account for mobile nav height */
+        box-sizing: border-box;
+    }
+
+    main.mobile-visible {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .content {
+        width: 100%;
+        height: 100%;
+    }
+
+    .chat-area {
+        width: 100%;
+        height: 100%;
+    }
+}

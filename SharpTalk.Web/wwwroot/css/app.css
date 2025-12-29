@@ -226,6 +226,13 @@ body {
     transition: background-color 0.1s;
 }
 
+/* Hide workspace name header on mobile */
+@media (max-width: 640.98px) {
+    .workspace-name-header {
+        display: none;
+    }
+}
+
 .workspace-name-header:hover {
     background-color: #34373c;
 }
@@ -958,6 +965,140 @@ label.form-label {
 
 .dropdown-item .icon {
     margin-right: 8px;
+}
+
+/* Mobile User Profile Positioning */
+@media (max-width: 640.98px) {
+    .user-profile-container {
+        bottom: 20px;
+        left: 20px;
+        right: auto;
+        max-width: 48px;
+        z-index: 1000;
+    }
+
+    .user-profile {
+        padding: 8px;
+        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        justify-content: center;
+        max-width: 48px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .user-info,
+    .dropdown-arrow {
+        display: none;
+    }
+
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* Expanded State */
+    .user-profile.expanded {
+        width: auto;
+        max-width: 200px;
+        border-radius: 24px;
+        padding: 8px 16px;
+        justify-content: space-between;
+    }
+
+    .user-profile.expanded .user-info,
+    .user-profile.expanded .dropdown-arrow {
+        display: flex;
+    }
+
+    /* Smooth Menu Animation */
+    .user-dropdown {
+        transform-origin: bottom left;
+        transform: scale(0.8) translateY(10px);
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+    }
+
+    .user-dropdown.visible {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Add bottom padding to message input to prevent overlap */
+    .message-input {
+        padding-bottom: 80px;
+    }
+}
+
+/* Mobile Navigation */
+.mobile-nav {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background-color: #36393f;
+    border-bottom: 1px solid #202225;
+    height: 56px;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-sizing: border-box;
+}
+
+@media (max-width: 640.98px) {
+    .mobile-nav {
+        display: flex;
+    }
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background-color: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #dcddde;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+    z-index: 51;
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.nav-btn:hover {
+    background-color: #40444b;
+}
+
+.nav-btn:active {
+    background-color: #5865f2;
+}
+
+.nav-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.nav-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    text-align: center;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 12px;
+    z-index: 50;
+    min-width: 0;
 }
 
 /* Message Avatar */

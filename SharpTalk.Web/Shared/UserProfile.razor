@@ -2,9 +2,12 @@
 @using SharpTalk.Web.Services
 @inject UserService UserService
 @inject UrlUtilityService UrlUtilityService
+@inject IJSRuntime JSRuntime
 
 <div class="user-profile-container">
-    <div class="user-profile" @onclick="ToggleDropdown">
+    <div class="user-profile @(IsExpanded ? "expanded" : "")" 
+         @onclick="HandleClick"
+         @ref="userProfileElement">
         <div class="user-avatar-wrapper">
             <img src="@UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl, "m")"
                  class="user-avatar @(CurrentUser?.Status?.ToLower() ?? "offline")"
@@ -19,7 +22,7 @@
 
     @if (IsDropdownOpen)
     {
-        <div class="user-dropdown" @onclick:stopPropagation>
+        <div class="user-dropdown @(IsDropdownVisible ? "visible" : "")" @onclick:stopPropagation>
             <button class="dropdown-item" @onclick="OpenSettings">
                 <span class="icon">⚙️</span> Settings
             </button>
@@ -35,12 +38,23 @@
 @code {
     private UserInfo? CurrentUser;
     private bool IsDropdownOpen = false;
+    private bool IsDropdownVisible = false;
+    private bool IsExpanded = false;
     private UserSettingsModal? SettingsModal;
+    private ElementReference userProfileElement;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfo();
         UserService.OnUserInfoChanged += HandleUserInfoChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("setupUserProfileGestures", userProfileElement);
+        }
     }
 
     private async Task LoadUserInfo()
@@ -55,20 +69,56 @@
         StateHasChanged();
     }
 
+    private void HandleClick()
+    {
+        // On desktop or quick tap, toggle dropdown
+        if (!IsExpanded)
+        {
+            ToggleDropdown();
+        }
+        else
+        {
+            // If already expanded, clicking toggles dropdown
+            ToggleDropdown();
+        }
+    }
+
     private void ToggleDropdown()
     {
-        IsDropdownOpen = !IsDropdownOpen;
+        if (IsDropdownOpen)
+        {
+            // Close dropdown
+            IsDropdownVisible = false;
+            Task.Delay(300).ContinueWith(_ =>
+            {
+                IsDropdownOpen = false;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        else
+        {
+            // Open dropdown
+            IsDropdownOpen = true;
+            StateHasChanged();
+            Task.Delay(10).ContinueWith(_ =>
+            {
+                IsDropdownVisible = true;
+                InvokeAsync(StateHasChanged);
+            });
+        }
     }
 
     private void OpenSettings()
     {
         IsDropdownOpen = false;
+        IsDropdownVisible = false;
         SettingsModal?.Open();
     }
 
     private async Task Logout()
     {
         IsDropdownOpen = false;
+        IsDropdownVisible = false;
         await UserService.LogoutAsync();
     }
 

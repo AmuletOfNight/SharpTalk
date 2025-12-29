@@ -7,7 +7,12 @@
 <div class="page">
     @if (IsAuthenticated)
     {
-        <div class="sidebar">
+        @if (isMobile)
+        {
+            <MobileNavigation CurrentView="currentMobileView" OnBack="GoBack" OnMenuToggle="ToggleMenu" />
+        }
+
+        <div class="sidebar @(isMobile && currentMobileView == MobileView.WorkspaceList ? "mobile-visible" : "")">
             <div class="sidebar-content">
                 @if (IsLoading)
                 {
@@ -32,7 +37,7 @@
 
         @if (IsLoading)
         {
-            <div class="channel-sidebar">
+            <div class="channel-sidebar @(isMobile && currentMobileView == MobileView.ChannelList ? "mobile-visible" : "")">
                 <div class="workspace-name-header">
                     <div class="skeleton skeleton-title"></div>
                 </div>
@@ -47,21 +52,21 @@
         }
         else if (ActiveWorkspaceId == -2)
         {
-            <div class="channel-sidebar">
+            <div class="channel-sidebar @(isMobile && currentMobileView == MobileView.ChannelList ? "mobile-visible" : "")">
                 <DirectMessagesList ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
                                     OnChannelSelected="HandleChannelSelected" />
             </div>
         }
         else if (CurrentWorkspace != null)
         {
-            <div class="channel-sidebar">
-                <ChannelList Workspace="CurrentWorkspace" 
+            <div class="channel-sidebar @(isMobile && currentMobileView == MobileView.ChannelList ? "mobile-visible" : "")">
+                <ChannelList Workspace="CurrentWorkspace"
                              ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
                              OnChannelSelected="HandleChannelSelected" />
             </div>
         }
 
-        <main>
+        <main class="@(isMobile && currentMobileView == MobileView.ChatArea ? "mobile-visible" : "")">
             <article class="content px-4">
                 @if (IsLoading)
                 {
@@ -109,6 +114,7 @@
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject WorkspaceService WorkspaceService
 @inject UserService UserService
+@inject IJSRuntime JSRuntime
 
 @code {
     private List<WorkspaceDto>? Workspaces;
@@ -117,6 +123,8 @@
     private bool IsLoading = true;
     private bool IsAuthenticated = false;
     private int ActiveWorkspaceId = -1;
+    private MobileView currentMobileView = MobileView.WorkspaceList;
+    private bool isMobile = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -129,6 +137,14 @@
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckMobileView();
         }
     }
 
@@ -213,7 +229,7 @@
              if (CurrentWorkspace != null)
              {
                  await LocalStorage.SetItemAsync("lastWorkspaceId", workspaceId);
-                 
+                  
                  // Handle AutoOpenLastChannel
                  var user = UserService.CurrentUser;
                  if (user != null && user.AutoOpenLastChannel)
@@ -227,7 +243,7 @@
                      // OR, simply: Don't set CurrentChannel yet. Let ChannelList component handle "Auto Select Last" if specific logic is preferred.
                      // But "ChannelList" is only rendered IF CurrentWorkspace is not null.
                      // If we want to "Drop user into last channel", we need `CurrentChannel` to be non-null.
-                     
+                      
                      // Let's try to fetch channel list for the workspace to be safe.
                      if (lastChannelId.HasValue)
                      {
@@ -239,7 +255,7 @@
                          {
                              CurrentChannel = channel;
                          }
-                         else 
+                         else
                          {
                              // Default to general? Or null (show channel list)
                              // User: "or have to have the user click on a channel"
@@ -265,6 +281,12 @@
              }
         }
         
+        // Mobile: Navigate to channel list when workspace is selected
+        if (isMobile && workspaceId > 0)
+        {
+            SetMobileView(MobileView.ChannelList);
+        }
+        
         StateHasChanged();
     }
     
@@ -288,6 +310,13 @@
         {
             await LocalStorage.SetItemAsync($"workspace_{CurrentWorkspace.Id}_lastChannel", channel.Id);
         }
+        
+        // Mobile: Navigate to chat area when channel is selected
+        if (isMobile)
+        {
+            SetMobileView(MobileView.ChatArea);
+        }
+        
         StateHasChanged();
     }
     
@@ -303,5 +332,50 @@
         if (Workspaces == null) Workspaces = new List<WorkspaceDto>();
         Workspaces.Add(newWorkspace);
         await HandleWorkspaceSelected(newWorkspace.Id); // Auto switch
+    }
+
+    private async Task CheckMobileView()
+    {
+        var mobileView = await JSRuntime.InvokeAsync<bool>("isMobile");
+        if (mobileView != isMobile)
+        {
+            isMobile = mobileView;
+            StateHasChanged();
+        }
+    }
+
+    private void SetMobileView(MobileView view)
+    {
+        currentMobileView = view;
+        StateHasChanged();
+    }
+
+    private void GoBack()
+    {
+        switch (currentMobileView)
+        {
+            case MobileView.ChatArea:
+                SetMobileView(MobileView.ChannelList);
+                break;
+            case MobileView.ChannelList:
+                SetMobileView(MobileView.WorkspaceList);
+                break;
+        }
+    }
+
+    private void ToggleMenu()
+    {
+        switch (currentMobileView)
+        {
+            case MobileView.WorkspaceList:
+                // Already on workspace list, do nothing
+                break;
+            case MobileView.ChannelList:
+                SetMobileView(MobileView.WorkspaceList);
+                break;
+            case MobileView.ChatArea:
+                SetMobileView(MobileView.ChannelList);
+                break;
+        }
     }
 }
