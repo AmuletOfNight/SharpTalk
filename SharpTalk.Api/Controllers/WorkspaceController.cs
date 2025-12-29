@@ -82,4 +82,37 @@ public class WorkspaceController : ControllerBase
             MemberCount = 1
         });
     }
+    [HttpPost("invite")]
+    public async Task<IActionResult> InviteUser(InviteUserRequest request)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces.FindAsync(request.WorkspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        if (workspace.OwnerId != userId)
+        {
+            return Forbid();
+        }
+
+        var userToInvite = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+        if (userToInvite == null) return NotFound("User not found");
+
+        var exists = await _context.WorkspaceMembers
+            .AnyAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == userToInvite.Id);
+
+        if (exists) return BadRequest("User is already a member");
+
+        var member = new WorkspaceMember
+        {
+            WorkspaceId = request.WorkspaceId,
+            UserId = userToInvite.Id,
+            Role = "Member"
+        };
+
+        _context.WorkspaceMembers.Add(member);
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
 }

@@ -43,4 +43,10 @@ public class WorkspaceService
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
     }
+    public async Task<bool> InviteUserAsync(InviteUserRequest request)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsJsonAsync("api/workspace/invite", request);
+        return response.IsSuccessStatusCode;
+    }
 }

@@ -1,11 +1,26 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject ChannelService ChannelService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 
 <div class="channel-list">
-    <div class="channel-header">
-        <h5>Channels</h5>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenCreateModal">+</button>
+    <div class="channel-header mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="fw-bold m-0 text-truncate">@(Workspace?.Name ?? "Workspace")</h5>
+            @if (IsOwner)
+            {
+                <button class="btn btn-sm btn-link text-decoration-none" @onclick="OpenInviteModal" title="Invite User">
+                    Invite
+                </button>
+            }
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="text-muted small m-0 text-uppercase">Channels</h6>
+            <button class="btn btn-sm btn-link text-decoration-none p-0" @onclick="OpenCreateModal">+</button>
+        </div>
     </div>
     <ul class="list-group list-group-flush">
         @foreach (var channel in Channels)
@@ -18,31 +33,50 @@
     </ul>
 </div>
 
-<CreateChannelModal @ref="CreateModal" WorkspaceId="WorkspaceId" OnChannelCreated="OnChannelCreated" />
+<CreateChannelModal @ref="CreateModal" WorkspaceId="@(Workspace?.Id ?? 0)" OnChannelCreated="OnChannelCreated" />
+<InviteUserModal @ref="InviteModal" WorkspaceId="@(Workspace?.Id ?? 0)" />
 
 @code {
     [Parameter]
-    public int WorkspaceId { get; set; }
+    public WorkspaceDto? Workspace { get; set; }
 
     [Parameter]
     public EventCallback<int> OnChannelSelected { get; set; }
 
     private List<ChannelDto> Channels = new List<ChannelDto>();
     private CreateChannelModal? CreateModal;
+    private InviteUserModal? InviteModal;
     private int selectedChannelId;
+    private bool IsOwner;
+    private int _lastWorkspaceId;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (WorkspaceId > 0)
+        if (Workspace != null && Workspace.Id != _lastWorkspaceId)
         {
+            _lastWorkspaceId = Workspace.Id;
+            await CheckOwnership();
             await LoadChannels();
-            selectedChannelId = 0; // Reset selection on workspace change
+            selectedChannelId = 0;
+        }
+    }
+
+    private async Task CheckOwnership()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userIdStr = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdStr, out int userId))
+        {
+            IsOwner = Workspace?.OwnerId == userId;
         }
     }
 
     private async Task LoadChannels()
     {
-        Channels = await ChannelService.GetChannelsAsync(WorkspaceId);
+        if (Workspace != null)
+        {
+            Channels = await ChannelService.GetChannelsAsync(Workspace.Id);
+        }
     }
 
     private async Task SelectChannel(int id)
@@ -54,6 +88,11 @@
     private void OpenCreateModal()
     {
         CreateModal?.Open();
+    }
+
+    private void OpenInviteModal()
+    {
+        InviteModal?.Open();
     }
 
     private async Task OnChannelCreated(ChannelDto newChannel)

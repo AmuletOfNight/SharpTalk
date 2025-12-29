@@ -17,18 +17,18 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [x] Configure Docker Compose (PostgreSQL, Redis)
 - [x] **Domain & Data Layer**
     - [x] Define EF Core Entities (User, Workspace, WorkspaceMember, Channel, ChannelMember, Message, Attachment, Reaction)
-    - [ ] Implement Identity (Sign Up, Login, JWT)
+    - [x] Implement Identity (Sign Up, Login, JWT)
     - [x] Create PostgreSQL Migrations
 - [ ] **Core API Implementation**
-    - [ ] Workspace Management (Create, List, Join)
-    - [ ] Channel Management (Create, List, Public/Private)
+    - [x] Workspace Management (Create, List, Join/Invite)
+    - [x] Channel Management (Create, List, Public/Private)
 - [ ] **Real-time Messaging (Backend)**
     - [ ] Configure SignalR Hubs
     - [ ] Implement Message sending logic (Persistence + Broadcast)
-- [ ] **Frontend Foundation (Blazor)**
-    - [ ] Set up MainLayout with Sidebar
-    - [ ] Implement Auth State Provider (JWT handling)
-    - [ ] Create basic Chat Interface Components
+- [x] **Frontend Foundation (Blazor)**
+    - [x] Set up MainLayout with Sidebar
+    - [x] Implement Auth State Provider (JWT handling)
+    - [x] Create basic Chat Interface Components
 
 ## Phase 2: The "Slack" Feel (Enhanced UX)
 - [ ] **Direct Messages**
@@ -52,8 +52,8 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [ ] Quick Switcher (Ctrl+K)
 
 ## Current Task
-- [ ] **Core API Implementation**
-    - [ ] Implement Identity (Sign Up, Login, JWT)
-    - [ ] Workspace Management
+- [ ] **Real-time Messaging (Backend)**
+    - [ ] Configure SignalR Hubs
+    - [ ] Implement Message sending logic (Persistence + Broadcast)
 
 

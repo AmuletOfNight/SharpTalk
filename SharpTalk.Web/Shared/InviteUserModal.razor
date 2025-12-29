@@ -1,0 +1,92 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject WorkspaceService WorkspaceService
+
+@if (Show)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Invite User</h5>
+                    <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(Error))
+                    {
+                        <div class="alert alert-danger">@Error</div>
+                    }
+                    @if (Success)
+                    {
+                        <div class="alert alert-success">User invited successfully!</div>
+                    }
+
+                    @if (!Success)
+                    {
+                        <EditForm Model="inviteRequest" OnValidSubmit="HandleSubmit">
+                            <DataAnnotationsValidator />
+                            <div class="mb-3">
+                                <label class="form-label">Username</label>
+                                <InputText @bind-Value="inviteRequest.Username" class="form-control"
+                            placeholder="Enter username" />
+                                <ValidationMessage For="@(() => inviteRequest.Username)" />
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Invite</button>
+                            </div>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" @onclick="Close">Close</button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int WorkspaceId { get; set; }
+
+    public bool Show { get; private set; }
+    private InviteUserRequest inviteRequest = new InviteUserRequest();
+    private string Error = "";
+    private bool Success = false;
+
+    public void Open()
+    {
+        Show = true;
+        inviteRequest = new InviteUserRequest { WorkspaceId = WorkspaceId };
+        Error = "";
+        Success = false;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        Show = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmit()
+    {
+        Error = "";
+        inviteRequest.WorkspaceId = WorkspaceId;
+        var success = await WorkspaceService.InviteUserAsync(inviteRequest);
+        if (success)
+        {
+            Success = true;
+            inviteRequest.Username = "";
+        }
+        else
+        {
+            Error = "Failed to invite user. Check if username exists or if they are already a member.";
+        }
+    }
+}

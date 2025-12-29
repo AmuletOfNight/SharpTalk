@@ -7,9 +7,8 @@
     <div class="workspace-list">
         @foreach (var workspace in Workspaces)
         {
-            <div class="workspace-item @(selectedWorkspaceId == workspace.Id ? "active" : "")" 
-                 title="@workspace.Name" 
-                 @onclick="() => SelectWorkspace(workspace.Id)">
+            <div class="workspace-item @(selectedWorkspaceId == workspace.Id ? "active" : "")" title="@workspace.Name"
+            @onclick="() => SelectWorkspace(workspace.Id)">
                 <span class="workspace-icon">@workspace.Name.Substring(0, 1).ToUpper()</span>
             </div>
         }
@@ -23,7 +22,7 @@
 
 @code {
     [Parameter]
-    public EventCallback<int> OnWorkspaceSelected { get; set; }
+    public EventCallback<WorkspaceDto> OnWorkspaceSelected { get; set; }
 
     private List<WorkspaceDto> Workspaces = new List<WorkspaceDto>();
     private CreateWorkspaceModal? CreateModal;
@@ -46,7 +45,11 @@
     private async Task SelectWorkspace(int id)
     {
         selectedWorkspaceId = id;
-        await OnWorkspaceSelected.InvokeAsync(id);
+        var workspace = Workspaces.FirstOrDefault(w => w.Id == id);
+        if (workspace != null)
+        {
+            await OnWorkspaceSelected.InvokeAsync(workspace);
+        }
     }
 
     private void OpenCreateModal()
