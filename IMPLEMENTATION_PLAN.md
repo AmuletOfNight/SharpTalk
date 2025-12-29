@@ -15,30 +15,43 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [x] Initialize Git repository
     - [x] Set up solution structure (Backend, Frontend, Shared)
     - [x] Configure Docker Compose (PostgreSQL, Redis)
-- [ ] **Domain & Data Layer**
+- [x] **Domain & Data Layer**
     - [x] Define EF Core Entities (User, Workspace, WorkspaceMember, Channel, Message)
     - [x] Add remaining entities (ChannelMember, Attachment, Reaction)
     - [x] Implement Identity (Sign Up, Login, JWT)
     - [x] Create PostgreSQL Migrations (Initial)
-- [ ] **Core API Implementation**
+- [x] **Core API Implementation**
     - [x] Workspace Management (Create, List, Join/Invite)
     - [x] Channel Management (Create, List)
     - [x] Functional Private Channels (requires ChannelMember)
-- [ ] **Real-time Messaging (Backend)**
-    - [ ] Configure SignalR Hubs
-    - [ ] Implement Message sending logic (Persistence + Broadcast)
+- [x] **Real-time Messaging (Backend)**
+    - [x] Configure SignalR Hubs
+    - [x] Implement Message sending logic (Persistence + Broadcast)
 - [x] **Frontend Foundation (Blazor)**
     - [x] Set up MainLayout with Sidebar
     - [x] Implement Auth State Provider (JWT handling)
     - [x] Create basic Chat Interface Components
 
+## Phase 1.5: Stability & Refinements (Completed)
+- [x] **Authentication & Security**
+    - [x] Case-insensitive email handling
+    - [x] Redirect non-existent users (invalid cookie handling)
+    - [x] Fix logout functionality
+- [x] **UI/UX Polish**
+    - [x] Enhance User Settings UI (Consistency, Layout)
+    - [x] Optimize Avatar Cropper UI
+    - [x] Improve Loading Experience (Splash screen, Ghost loaders)
+    - [x] Add visual boxes to Login/Register pages
+- [x] **Infrastructure**
+    - [x] Migrate to Blazor.LocalStorage (v9)
+
 ## Phase 2: The "Slack" Feel (Enhanced UX)
 - [ ] **Direct Messages**
     - [ ] 1:1 DM support
     - [ ] Group DM support
-- [ ] **Presence & Indicators**
-    - [ ] Online/Offline Status (Connection tracking with Redis)
-    - [ ] Typing Indicators ("User is typing...")
+- [x] **Presence & Indicators**
+    - [x] Online/Offline Status (Connection tracking with Redis)
+    - [ ] Calling/Typing Indicators ("User is typing...")
 - [ ] **Notifications & Unread**
     - [ ] Unread message counters per channel
     - [ ] "Edited" status for messages
@@ -52,10 +65,10 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
 - [ ] **Search**
     - [ ] Global search (Users, Messages)
     - [ ] Quick Switcher (Ctrl+K)
+- [ ] **Configuration**
+    - [ ] Move hardcoded values to appsettings.json
 
 ## Current Task
-- [ ] **Real-time Messaging (Backend)**
-    - [ ] Configure SignalR Hubs
-    - [ ] Implement Message sending logic (Persistence + Broadcast)
-
+- [ ] **Direct Messages**
+    - [ ] 1:1 DM support
 
