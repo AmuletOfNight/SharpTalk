@@ -16,10 +16,19 @@
         }
     </div>
 
+    <div class="typing-indicator">
+        @if (TypingUsers.Any())
+        {
+            <small class="text-muted italic">
+                @(string.Join(", ", TypingUsers.Values)) @(TypingUsers.Count == 1 ? "is" : "are") typing...
+            </small>
+        }
+    </div>
+
     <div class="message-input">
         <form @onsubmit="SendMessage">
-            <input type="text" class="form-control" placeholder="Message #Channel" @bind="newMessage"
-                @bind:event="oninput" />
+            <input type="text" class="form-control" placeholder="Message #Channel" @value="newMessage"
+                @oninput="OnInput" />
         </form>
     </div>
 </div>
@@ -31,10 +40,14 @@
     private List<MessageDto> Messages = new List<MessageDto>();
     private string newMessage = string.Empty;
     private int _currentChannelId;
+    private Dictionary<int, string> TypingUsers = new Dictionary<int, string>();
+    private System.Timers.Timer? typingTimer;
+    private bool isTypingSent = false;
 
     protected override async Task OnInitializedAsync()
     {
         ChatService.OnMessageReceived += HandleMessageReceived;
+        ChatService.OnUserTyping += HandleUserTyping;
         await ChatService.InitializeAsync();
     }
 
@@ -64,8 +77,51 @@
         if (message.ChannelId == ChannelId)
         {
             Messages.Add(message);
+            // Clear typing indicator for this user if it exists
+            if (TypingUsers.ContainsKey(message.UserId))
+            {
+                TypingUsers.Remove(message.UserId);
+            }
             StateHasChanged();
-            // Scroll to bottom?
+        }
+    }
+
+    private void HandleUserTyping(int channelId, int userId, string username, bool isTyping)
+    {
+        if (channelId == ChannelId)
+        {
+            if (isTyping)
+            {
+                if (!TypingUsers.ContainsKey(userId))
+                {
+                    TypingUsers[userId] = username;
+                }
+            }
+            else
+            {
+                TypingUsers.Remove(userId);
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        newMessage = e.Value?.ToString() ?? string.Empty;
+        if (!isTypingSent && !string.IsNullOrWhiteSpace(newMessage))
+        {
+            isTypingSent = true;
+            await ChatService.SendTypingIndicatorAsync(ChannelId, true);
+
+            typingTimer?.Stop();
+            typingTimer = new System.Timers.Timer(3000);
+            typingTimer.Elapsed += async (s, args) =>
+            {
+                isTypingSent = false;
+                await ChatService.SendTypingIndicatorAsync(ChannelId, false);
+                typingTimer.Stop();
+            };
+            typingTimer.Start();
         }
     }
 
@@ -75,12 +131,17 @@
         {
             await ChatService.SendMessageAsync(ChannelId, newMessage);
             newMessage = string.Empty;
+            isTypingSent = false;
+            typingTimer?.Stop();
+            await ChatService.SendTypingIndicatorAsync(ChannelId, false);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
         ChatService.OnMessageReceived -= HandleMessageReceived;
+        ChatService.OnUserTyping -= HandleUserTyping;
+        typingTimer?.Dispose();
         if (_currentChannelId > 0)
         {
             await ChatService.LeaveChannelAsync(_currentChannelId);

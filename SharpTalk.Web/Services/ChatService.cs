@@ -14,6 +14,8 @@ public class ChatService : IAsyncDisposable
     private readonly ILocalStorageService _localStorage;
 
     public event Action<MessageDto>? OnMessageReceived;
+    public event Action<UserStatusDto>? OnUserStatusChanged;
+    public event Action<int, int, string, bool>? OnUserTyping;
 
     public ChatService(HttpClient httpClient, NavigationManager navigationManager, ILocalStorageService localStorage)
     {
@@ -40,7 +42,25 @@ public class ChatService : IAsyncDisposable
             OnMessageReceived?.Invoke(message);
         });
 
+        _hubConnection.On<UserStatusDto>("UserStatusChanged", (status) =>
+        {
+            OnUserStatusChanged?.Invoke(status);
+        });
+
+        _hubConnection.On<int, int, string, bool>("UserTyping", (channelId, userId, username, isTyping) =>
+        {
+            OnUserTyping?.Invoke(channelId, userId, username, isTyping);
+        });
+
         await _hubConnection.StartAsync();
+    }
+
+    public async Task JoinWorkspaceAsync(int workspaceId)
+    {
+        if (_hubConnection is not null && _hubConnection.State == HubConnectionState.Connected)
+        {
+            await _hubConnection.SendAsync("JoinWorkspace", workspaceId);
+        }
     }
 
     public async Task JoinChannelAsync(int channelId)
@@ -64,6 +84,14 @@ public class ChatService : IAsyncDisposable
         if (_hubConnection is not null && _hubConnection.State == HubConnectionState.Connected)
         {
             await _hubConnection.SendAsync("SendMessage", channelId, content);
+        }
+    }
+
+    public async Task SendTypingIndicatorAsync(int channelId, bool isTyping)
+    {
+        if (_hubConnection is not null && _hubConnection.State == HubConnectionState.Connected)
+        {
+            await _hubConnection.SendAsync("SendTypingIndicator", channelId, isTyping);
         }
     }
 

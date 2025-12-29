@@ -49,4 +49,10 @@ public class WorkspaceService
         var response = await _httpClient.PostAsJsonAsync("api/workspace/invite", request);
         return response.IsSuccessStatusCode;
     }
+
+    public async Task<List<UserStatusDto>> GetWorkspaceMembersAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<UserStatusDto>>($"api/workspace/{workspaceId}/members") ?? new List<UserStatusDto>();
+    }
 }

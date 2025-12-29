@@ -2,9 +2,11 @@
 @using SharpTalk.Web.Services
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
 @inject ChannelService ChannelService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject ChatService ChatService
 
 <div class="channel-list">
     <div class="channel-header mb-3">
@@ -22,12 +24,25 @@
             <button class="btn btn-sm btn-link text-decoration-none p-0" @onclick="OpenCreateModal">+</button>
         </div>
     </div>
-    <ul class="list-group list-group-flush">
+    <ul class="list-group list-group-flush mb-4">
         @foreach (var channel in Channels)
         {
             <li class="list-group-item channel-item @(selectedChannelId == channel.Id ? "active" : "")"
             @onclick="() => SelectChannel(channel.Id)">
                 <span class="channel-hash">#</span> @channel.Name
+            </li>
+        }
+    </ul>
+
+    <div class="members-header mb-2">
+        <h6 class="text-muted small m-0 text-uppercase">Members</h6>
+    </div>
+    <ul class="list-group list-group-flush">
+        @foreach (var member in Members)
+        {
+            <li class="list-group-item channel-item d-flex align-items-center">
+                <span class="status-indicator @(member.Status.ToLower()) me-2"></span>
+                @member.Username
             </li>
         }
     </ul>
@@ -44,19 +59,28 @@
     public EventCallback<int> OnChannelSelected { get; set; }
 
     private List<ChannelDto> Channels = new List<ChannelDto>();
+    private List<UserStatusDto> Members = new List<UserStatusDto>();
     private CreateChannelModal? CreateModal;
     private InviteUserModal? InviteModal;
     private int selectedChannelId;
     private bool IsOwner;
     private int _lastWorkspaceId;
 
+    protected override async Task OnInitializedAsync()
+    {
+        ChatService.OnUserStatusChanged += HandleUserStatusChanged;
+        await base.OnInitializedAsync();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (Workspace != null && Workspace.Id != _lastWorkspaceId)
         {
             _lastWorkspaceId = Workspace.Id;
+            await ChatService.JoinWorkspaceAsync(Workspace.Id);
             await CheckOwnership();
             await LoadChannels();
+            await LoadMembers();
             selectedChannelId = 0;
         }
     }
@@ -76,6 +100,31 @@
         if (Workspace != null)
         {
             Channels = await ChannelService.GetChannelsAsync(Workspace.Id);
+        }
+    }
+
+    private async Task LoadMembers()
+    {
+        if (Workspace != null)
+        {
+            Members = await WorkspaceService.GetWorkspaceMembersAsync(Workspace.Id);
+        }
+    }
+
+    private void HandleUserStatusChanged(UserStatusDto status)
+    {
+        var member = Members.FirstOrDefault(m => m.UserId == status.UserId);
+        if (member != null)
+        {
+            member.Status = status.Status;
+            StateHasChanged();
+        }
+        else
+        {
+            // If user just joined or we didn't have them, refresh list?
+            // Actually, if they are in the workspace but not in the initial list, they might be new.
+            // For now, let's just refresh if they are not found.
+            _ = LoadMembers();
         }
     }
 
@@ -99,5 +148,10 @@
     {
         Channels.Add(newChannel);
         await SelectChannel(newChannel.Id);
+    }
+
+    public void Dispose()
+    {
+        ChatService.OnUserStatusChanged -= HandleUserStatusChanged;
     }
 }

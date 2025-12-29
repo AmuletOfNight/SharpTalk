@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
+using StackExchange.Redis;
 using System.Security.Claims;
 
 namespace SharpTalk.Api.Controllers;
@@ -14,10 +15,12 @@ namespace SharpTalk.Api.Controllers;
 public class WorkspaceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IConnectionMultiplexer _redis;
 
-    public WorkspaceController(ApplicationDbContext context)
+    public WorkspaceController(ApplicationDbContext context, IConnectionMultiplexer redis)
     {
         _context = context;
+        _redis = redis;
     }
 
     [HttpGet]
@@ -114,5 +117,41 @@ public class WorkspaceController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok();
+    }
+
+    [HttpGet("{workspaceId}/members")]
+    public async Task<ActionResult<List<UserStatusDto>>> GetWorkspaceMembers(int workspaceId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var isMember = await _context.WorkspaceMembers
+            .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+
+        if (!isMember) return Forbid();
+
+        var members = await _context.WorkspaceMembers
+            .Where(wm => wm.WorkspaceId == workspaceId)
+            .Include(wm => wm.User)
+            .Select(wm => new UserStatusDto
+            {
+                UserId = wm.UserId,
+                Username = wm.User.Username,
+                Status = "Offline" // Default, will verify against Redis
+            })
+            .ToListAsync();
+
+        var db = _redis.GetDatabase();
+        var onlineUsers = await db.SetMembersAsync("online_users");
+        var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
+
+        foreach (var member in members)
+        {
+            if (onlineUserIds.Contains(member.UserId))
+            {
+                member.Status = "Online";
+            }
+        }
+
+        return Ok(members);
     }
 }
