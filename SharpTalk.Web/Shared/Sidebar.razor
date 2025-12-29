@@ -1,0 +1,62 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject WorkspaceService WorkspaceService
+@inject NavigationManager Navigation
+
+<div class="sidebar">
+    <div class="workspace-list">
+        @foreach (var workspace in Workspaces)
+        {
+            <div class="workspace-item @(selectedWorkspaceId == workspace.Id ? "active" : "")" 
+                 title="@workspace.Name" 
+                 @onclick="() => SelectWorkspace(workspace.Id)">
+                <span class="workspace-icon">@workspace.Name.Substring(0, 1).ToUpper()</span>
+            </div>
+        }
+        <div class="workspace-item add-workspace" @onclick="OpenCreateModal">
+            <span class="workspace-icon">+</span>
+        </div>
+    </div>
+</div>
+
+<CreateWorkspaceModal @ref="CreateModal" OnWorkspaceCreated="OnWorkspaceCreated" />
+
+@code {
+    [Parameter]
+    public EventCallback<int> OnWorkspaceSelected { get; set; }
+
+    private List<WorkspaceDto> Workspaces = new List<WorkspaceDto>();
+    private CreateWorkspaceModal? CreateModal;
+    private int selectedWorkspaceId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkspaces();
+    }
+
+    private async Task LoadWorkspaces()
+    {
+        Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
+        if (Workspaces.Any())
+        {
+            await SelectWorkspace(Workspaces.First().Id);
+        }
+    }
+
+    private async Task SelectWorkspace(int id)
+    {
+        selectedWorkspaceId = id;
+        await OnWorkspaceSelected.InvokeAsync(id);
+    }
+
+    private void OpenCreateModal()
+    {
+        CreateModal?.Open();
+    }
+
+    private async Task OnWorkspaceCreated(WorkspaceDto newWorkspace)
+    {
+        Workspaces.Add(newWorkspace);
+        await SelectWorkspace(newWorkspace.Id);
+    }
+}

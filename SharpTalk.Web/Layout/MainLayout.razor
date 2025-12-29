@@ -1,8 +1,17 @@
-﻿@inherits LayoutComponentBase
+﻿@using SharpTalk.Web.Shared
+@inherits LayoutComponentBase
+
 <div class="page">
     <div class="sidebar">
-        <NavMenu />
+        <Sidebar OnWorkspaceSelected="HandleWorkspaceSelected" />
     </div>
+
+    @if (CurrentWorkspaceId.HasValue)
+    {
+        <div class="channel-sidebar">
+            <ChannelList WorkspaceId="CurrentWorkspaceId.Value" />
+        </div>
+    }
 
     <main>
         <div class="top-row px-4">
@@ -14,3 +23,12 @@
         </article>
     </main>
 </div>
+
+@code {
+    private int? CurrentWorkspaceId;
+
+    private void HandleWorkspaceSelected(int workspaceId)
+    {
+        CurrentWorkspaceId = workspaceId;
+    }
+}

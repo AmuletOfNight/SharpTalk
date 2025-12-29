@@ -49,13 +49,34 @@ main {
 @media (min-width: 641px) {
     .page {
         flex-direction: row;
+        height: 100vh;
+        overflow: hidden;
     }
 
     .sidebar {
-        width: 250px;
+        width: 72px;
         height: 100vh;
+        position: relative; /* Remove sticky, flex container handles it */
+        background-color: #202225;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 10px;
+    }
+
+    .channel-sidebar {
+        width: 240px;
+        height: 100vh;
+        background-color: #2f3136;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .top-row {
         position: sticky;
         top: 0;
+        z-index: 1;
     }
 
     .top-row {

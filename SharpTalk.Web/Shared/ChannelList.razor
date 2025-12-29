@@ -1,0 +1,51 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject ChannelService ChannelService
+
+<div class="channel-list">
+    <div class="channel-header">
+        <h5>Channels</h5>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenCreateModal">+</button>
+    </div>
+    <ul class="list-group list-group-flush">
+        @foreach (var channel in Channels)
+        {
+            <li class="list-group-item channel-item">
+                <span class="channel-hash">#</span> @channel.Name
+            </li>
+        }
+    </ul>
+</div>
+
+<CreateChannelModal @ref="CreateModal" WorkspaceId="WorkspaceId" OnChannelCreated="OnChannelCreated" />
+
+@code {
+    [Parameter]
+    public int WorkspaceId { get; set; }
+
+    private List<ChannelDto> Channels = new List<ChannelDto>();
+    private CreateChannelModal? CreateModal;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (WorkspaceId > 0)
+        {
+            await LoadChannels();
+        }
+    }
+
+    private async Task LoadChannels()
+    {
+        Channels = await ChannelService.GetChannelsAsync(WorkspaceId);
+    }
+
+    private void OpenCreateModal()
+    {
+        CreateModal?.Open();
+    }
+
+    private async Task OnChannelCreated(ChannelDto newChannel)
+    {
+        Channels.Add(newChannel);
+    }
+}

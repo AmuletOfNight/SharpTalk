@@ -12,6 +12,8 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+builder.Services.AddScoped<SharpTalk.Web.Services.WorkspaceService>();
+builder.Services.AddScoped<SharpTalk.Web.Services.ChannelService>();
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:5298") });
 
 await builder.Build().RunAsync();

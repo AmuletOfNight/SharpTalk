@@ -1,0 +1,78 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject ChannelService ChannelService
+
+@if (Display)
+{
+    <div class="modal-backdrop fade show" @onclick="Close"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Channel</h5>
+                    <button type="button" class="close" @onclick="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="createRequest" OnValidSubmit="HandleValidSubmit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="form-group">
+                            <label for="name">Channel Name</label>
+                            <InputText id="name" class="form-control" @bind-Value="createRequest.Name" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <InputText id="description" class="form-control" @bind-Value="createRequest.Description" />
+                        </div>
+
+                        <div class="form-group form-check">
+                            <InputCheckbox id="isPrivate" class="form-check-input" @bind-Value="createRequest.IsPrivate" />
+                            <label class="form-check-label" for="isPrivate">Private Channel</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Create</button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int WorkspaceId { get; set; }
+
+    [Parameter]
+    public EventCallback<ChannelDto> OnChannelCreated { get; set; }
+
+    private bool Display = false;
+    private CreateChannelRequest createRequest = new CreateChannelRequest();
+
+    public void Open()
+    {
+        createRequest = new CreateChannelRequest { WorkspaceId = WorkspaceId };
+        Display = true;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        Display = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        createRequest.WorkspaceId = WorkspaceId;
+        var newChannel = await ChannelService.CreateChannelAsync(createRequest);
+        if (newChannel != null)
+        {
+            await OnChannelCreated.InvokeAsync(newChannel);
+            Close();
+        }
+    }
+}
