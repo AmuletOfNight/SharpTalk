@@ -8,5 +8,6 @@ public class Channel
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsPrivate { get; set; }
+    public ICollection<ChannelMember> Members { get; set; } = new List<ChannelMember>();
     public ICollection<Message> Messages { get; set; } = new List<Message>();
 }

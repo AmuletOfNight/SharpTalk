@@ -5,12 +5,22 @@
 
 <div class="sidebar">
     <div class="workspace-list">
-        @foreach (var workspace in Workspaces)
+        @if (Workspaces == null || !Workspaces.Any() && isLoading)
         {
-            <div class="workspace-item @(selectedWorkspaceId == workspace.Id ? "active" : "")" title="@workspace.Name"
+            @for (int i = 0; i < 5; i++)
+            {
+                <div class="skeleton skeleton-icon"></div>
+            }
+        }
+        else
+        {
+            @foreach (var workspace in Workspaces)
+            {
+                <div class="workspace-item @(selectedWorkspaceId == workspace.Id ? "active" : "")" title="@workspace.Name"
             @onclick="() => SelectWorkspace(workspace.Id)">
-                <span class="workspace-icon">@workspace.Name.Substring(0, 1).ToUpper()</span>
-            </div>
+                    <span class="workspace-icon">@workspace.Name.Substring(0, 1).ToUpper()</span>
+                </div>
+            }
         }
         <div class="workspace-item add-workspace" @onclick="OpenCreateModal">
             <span class="workspace-icon">+</span>
@@ -27,6 +37,7 @@
     private List<WorkspaceDto> Workspaces = new List<WorkspaceDto>();
     private CreateWorkspaceModal? CreateModal;
     private int selectedWorkspaceId;
+    private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -35,10 +46,20 @@
 
     private async Task LoadWorkspaces()
     {
-        Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
-        if (Workspaces.Any())
+        try
         {
-            await SelectWorkspace(Workspaces.First().Id);
+            isLoading = true;
+            Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
+            isLoading = false;
+            if (Workspaces.Any())
+            {
+                await SelectWorkspace(Workspaces.First().Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading workspaces: {ex.Message}");
+            isLoading = false;
         }
     }
 

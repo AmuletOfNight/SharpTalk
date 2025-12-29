@@ -31,12 +31,21 @@ public class MessageController : ControllerBase
             return NotFound("Channel not found.");
         }
 
-        var isMember = await _context.WorkspaceMembers
-            .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
-
-        if (!isMember)
+        if (channel.IsPrivate)
         {
-            return Forbid();
+            var isChannelMember = await _context.ChannelMembers
+                .AnyAsync(cm => cm.ChannelId == channelId && cm.UserId == userId);
+            if (!isChannelMember) return Forbid();
+        }
+        else
+        {
+            var isMember = await _context.WorkspaceMembers
+                .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
+
+            if (!isMember)
+            {
+                return Forbid();
+            }
         }
 
         var messages = await _context.Messages

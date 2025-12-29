@@ -83,4 +83,22 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<SharpTalk.Api.Hubs.ChatHub>("/chatHub");
 
+// Cleanup Redis on startup (clear stale presence data)
+using (var scope = app.Services.CreateScope())
+{
+    var redis = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+    var db = redis.GetDatabase();
+    var server = redis.GetServer(redis.GetEndPoints().First());
+
+    // Clear the online_users set
+    await db.KeyDeleteAsync("online_users");
+
+    // Clear all user_connections sets
+    var keys = server.Keys(pattern: "user_connections:*").ToArray();
+    foreach (var key in keys)
+    {
+        await db.KeyDeleteAsync(key);
+    }
+}
+
 app.Run();

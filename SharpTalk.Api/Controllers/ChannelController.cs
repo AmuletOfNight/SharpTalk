@@ -35,7 +35,7 @@ public class ChannelController : ControllerBase
         }
 
         var channels = await _context.Channels
-            .Where(c => c.WorkspaceId == workspaceId)
+            .Where(c => c.WorkspaceId == workspaceId && (!c.IsPrivate || _context.ChannelMembers.Any(cm => cm.ChannelId == c.Id && cm.UserId == userId)))
             .Select(c => new ChannelDto
             {
                 Id = c.Id,
@@ -54,11 +54,16 @@ public class ChannelController : ControllerBase
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
-        // Verify membership
-        var member = await _context.WorkspaceMembers
-            .FirstOrDefaultAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == userId);
+        // Verify membership and ownership
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == request.WorkspaceId);
 
-        if (member == null)
+        if (workspace == null)
+        {
+            return NotFound("Workspace not found");
+        }
+
+        if (workspace.OwnerId != userId)
         {
             return Forbid();
         }
@@ -74,6 +79,15 @@ public class ChannelController : ControllerBase
         };
 
         _context.Channels.Add(channel);
+        await _context.SaveChangesAsync();
+
+        // Add creator as a member
+        var channelMember = new ChannelMember
+        {
+            ChannelId = channel.Id,
+            UserId = userId
+        };
+        _context.ChannelMembers.Add(channelMember);
         await _context.SaveChangesAsync();
 
         return Ok(new ChannelDto

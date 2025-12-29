@@ -1,0 +1,130 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject WorkspaceService WorkspaceService
+
+@if (Show)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content overflow-hidden">
+                <div class="modal-header">
+                    <h5 class="modal-title">Workspace Settings - @Workspace?.Name</h5>
+                    <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0 d-flex" style="min-height: 400px;">
+                    @if (IsOwner)
+                    {
+                        <div class="settings-sidebar bg-dark p-3" style="width: 200px; border-right: 1px solid #2f3136;">
+                            <ul class="nav flex-column nav-pills">
+                                <li class="nav-item">
+                                    <button class="nav-link w-100 text-start @(ActiveTab == "General" ? "active" : "")"
+                                @onclick='() => ActiveTab = "General"'>General</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link w-100 text-start @(ActiveTab == "Invite" ? "active" : "")"
+                                @onclick='() => ActiveTab = "Invite"'>Invite Users</button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="settings-content p-4 flex-grow-1">
+                            @if (ActiveTab == "General")
+                            {
+                                <h4>General Settings</h4>
+                                <div class="mb-3 mt-4">
+                                    <label class="form-label small text-uppercase fw-bold">Workspace Name</label>
+                                    <div class="d-flex gap-2">
+                                        <input type="text" class="form-control" value="@Workspace?.Name" readonly />
+                                        <button class="btn btn-primary" disabled>Rename</button>
+                                    </div>
+                                    <small class="text-muted">Renaming will be available in the next update.</small>
+                                </div>
+                            }
+                            else if (ActiveTab == "Invite")
+                            {
+                                <h4>Invite Users</h4>
+                                <p class="text-muted small">Invite your teammates to join this workspace by their username.</p>
+
+                                @if (!string.IsNullOrEmpty(Error))
+                                {
+                                    <div class="alert alert-danger mt-3">@Error</div>
+                                }
+                                @if (Success)
+                                {
+                                    <div class="alert alert-success mt-3">User invited successfully!</div>
+                                }
+
+                                <EditForm Model="inviteRequest" OnValidSubmit="HandleInvite">
+                                    <DataAnnotationsValidator />
+                                    <div class="mb-3 mt-4">
+                                        <label class="form-label small text-uppercase fw-bold">Username</label>
+                                        <div class="d-flex gap-2">
+                                            <InputText @bind-Value="inviteRequest.Username" class="form-control"
+                                    placeholder="Enter username" />
+                                            <button type="submit" class="btn btn-primary px-4">Invite</button>
+                                        </div>
+                                        <ValidationMessage For="@(() => inviteRequest.Username)" />
+                                    </div>
+                                </EditForm>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 flex-grow-1 text-center d-flex flex-column justify-content-center">
+                            <h4 class="text-danger">Access Denied</h4>
+                            <p>You do not have permission to access workspace settings.</p>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public WorkspaceDto? Workspace { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+
+    public bool Show { get; private set; }
+    private string ActiveTab = "Invite"; // Default to Invite as per user request
+    private InviteUserRequest inviteRequest = new InviteUserRequest();
+    private string Error = "";
+    private bool Success = false;
+
+    public void Open()
+    {
+        Show = true;
+        inviteRequest = new InviteUserRequest { WorkspaceId = Workspace?.Id ?? 0 };
+        Error = "";
+        Success = false;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        Show = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleInvite()
+    {
+        Error = "";
+        Success = false;
+        inviteRequest.WorkspaceId = Workspace?.Id ?? 0;
+
+        var success = await WorkspaceService.InviteUserAsync(inviteRequest);
+        if (success)
+        {
+            Success = true;
+            inviteRequest.Username = "";
+        }
+        else
+        {
+            Error = "Failed to invite user. Check if username exists or if they are already a member.";
+        }
+    }
+}

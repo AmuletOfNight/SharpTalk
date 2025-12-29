@@ -7,11 +7,14 @@ public class ApplicationDbContext : DbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
-    public DbSet<User> Users { get; set; }
-    public DbSet<Workspace> Workspaces { get; set; }
-    public DbSet<WorkspaceMember> WorkspaceMembers { get; set; }
-    public DbSet<Channel> Channels { get; set; }
-    public DbSet<Message> Messages { get; set; }
+    public DbSet<User> Users { get; set; } = null!;
+    public DbSet<Workspace> Workspaces { get; set; } = null!;
+    public DbSet<WorkspaceMember> WorkspaceMembers { get; set; } = null!;
+    public DbSet<Channel> Channels { get; set; } = null!;
+    public DbSet<ChannelMember> ChannelMembers { get; set; } = null!;
+    public DbSet<Message> Messages { get; set; } = null!;
+    public DbSet<Attachment> Attachments { get; set; } = null!;
+    public DbSet<Reaction> Reactions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,11 +24,18 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
         modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
 
+        // ChannelMember Composite Key
+        modelBuilder.Entity<ChannelMember>()
+            .HasKey(cm => new { cm.ChannelId, cm.UserId });
+
         // Relationships
         modelBuilder.Entity<WorkspaceMember>()
             .HasOne(wm => wm.User)
             .WithMany()
             .HasForeignKey(wm => wm.UserId)
-            .OnDelete(DeleteBehavior.Restrict); // Prevent user deletion from cascading if in workspace? Or cascade? Restrict for now.
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Reaction>()
+            .HasIndex(r => new { r.MessageId, r.UserId, r.EmojiCode }).IsUnique();
     }
 }

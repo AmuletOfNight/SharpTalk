@@ -7,49 +7,76 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject ChatService ChatService
+@inject WorkspaceService WorkspaceService
 
 <div class="channel-list">
-    <div class="channel-header mb-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <h5 class="fw-bold m-0 text-truncate">@(Workspace?.Name ?? "Workspace")</h5>
-            @if (IsOwner)
-            {
-                <button class="btn btn-sm btn-link text-decoration-none" @onclick="OpenInviteModal" title="Invite User">
-                    Invite
-                </button>
-            }
-        </div>
-        <div class="d-flex justify-content-between align-items-center">
-            <h6 class="text-muted small m-0 text-uppercase">Channels</h6>
-            <button class="btn btn-sm btn-link text-decoration-none p-0" @onclick="OpenCreateModal">+</button>
-        </div>
-    </div>
-    <ul class="list-group list-group-flush mb-4">
-        @foreach (var channel in Channels)
+    <div class="workspace-name-header">
+        <h5 title="@Workspace?.Name">@(Workspace?.Name ?? "Workspace")</h5>
+        @if (IsOwner)
         {
-            <li class="list-group-item channel-item @(selectedChannelId == channel.Id ? "active" : "")"
+            <div class="settings-trigger text-muted" title="Workspace Settings" @onclick="OpenWorkspaceSettings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                    </path>
+                </svg>
+            </div>
+        }
+    </div>
+
+    <div class="sidebar-category">
+        <h6>Channels</h6>
+        @if (IsOwner)
+        {
+            <button class="btn btn-sm btn-link text-decoration-none p-0 text-muted" @onclick="OpenCreateModal"
+            @onclick:stopPropagation="true" title="Create Channel">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>
+        }
+    </div>
+
+    <ul class="list-group list-group-flush mb-2">
+        @if (isLoading)
+        {
+            @for (int i = 0; i < 5; i++)
+            {
+                <div class="skeleton skeleton-channel"></div>
+            }
+        }
+        else
+        {
+            @foreach (var channel in Channels)
+            {
+                <li class="channel-item @(selectedChannelId == channel.Id ? "active" : "")"
             @onclick="() => SelectChannel(channel.Id)">
-                <span class="channel-hash">#</span> @channel.Name
-            </li>
+                    <span class="channel-hash">#</span> @channel.Name
+                </li>
+            }
         }
     </ul>
 
-    <div class="members-header mb-2">
-        <h6 class="text-muted small m-0 text-uppercase">Members</h6>
+    <div class="sidebar-category">
+        <h6>Members</h6>
     </div>
     <ul class="list-group list-group-flush">
         @foreach (var member in Members)
         {
-            <li class="list-group-item channel-item d-flex align-items-center">
+            <li class="channel-item d-flex align-items-center">
                 <span class="status-indicator @(member.Status.ToLower()) me-2"></span>
-                @member.Username
+                <span class="text-truncate">@member.Username</span>
             </li>
         }
     </ul>
 </div>
 
 <CreateChannelModal @ref="CreateModal" WorkspaceId="@(Workspace?.Id ?? 0)" OnChannelCreated="OnChannelCreated" />
-<InviteUserModal @ref="InviteModal" WorkspaceId="@(Workspace?.Id ?? 0)" />
+<WorkspaceSettingsModal @ref="SettingsModal" Workspace="Workspace" IsOwner="IsOwner" />
 
 @code {
     [Parameter]
@@ -61,10 +88,11 @@
     private List<ChannelDto> Channels = new List<ChannelDto>();
     private List<UserStatusDto> Members = new List<UserStatusDto>();
     private CreateChannelModal? CreateModal;
-    private InviteUserModal? InviteModal;
+    private WorkspaceSettingsModal? SettingsModal;
     private int selectedChannelId;
     private bool IsOwner;
     private int _lastWorkspaceId;
+    private bool isLoading;
 
     protected override async Task OnInitializedAsync()
     {
@@ -76,12 +104,14 @@
     {
         if (Workspace != null && Workspace.Id != _lastWorkspaceId)
         {
+            isLoading = true;
             _lastWorkspaceId = Workspace.Id;
             await ChatService.JoinWorkspaceAsync(Workspace.Id);
             await CheckOwnership();
             await LoadChannels();
             await LoadMembers();
             selectedChannelId = 0;
+            isLoading = false;
         }
     }
 
@@ -111,13 +141,13 @@
         }
     }
 
-    private void HandleUserStatusChanged(UserStatusDto status)
+    private async void HandleUserStatusChanged(UserStatusDto status)
     {
         var member = Members.FirstOrDefault(m => m.UserId == status.UserId);
         if (member != null)
         {
             member.Status = status.Status;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
         else
         {
@@ -139,9 +169,9 @@
         CreateModal?.Open();
     }
 
-    private void OpenInviteModal()
+    private void OpenWorkspaceSettings()
     {
-        InviteModal?.Open();
+        SettingsModal?.Open();
     }
 
     private async Task OnChannelCreated(ChannelDto newChannel)

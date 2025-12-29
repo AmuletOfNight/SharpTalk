@@ -9,12 +9,15 @@
 @inject NavigationManager Navigation
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
+<div class="splash-brand">Sharp<span>Talk</span></div>
+
 <div class="auth-container">
-    <h3>Login</h3>
+    <h3>Welcome back!</h3>
+    <div class="auth-subtitle">We're so excited to see you again!</div>
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="alert alert-danger">@ErrorMessage</div>
+        <div class="auth-alert">@ErrorMessage</div>
     }
 
     <EditForm Model="loginRequest" OnValidSubmit="HandleLogin">
@@ -23,17 +26,19 @@
 
         <div class="form-group">
             <label>Email</label>
-            <InputText @bind-Value="loginRequest.Email" class="form-control" />
+            <InputText @bind-Value="loginRequest.Email" class="form-control" placeholder="Enter your email" />
         </div>
 
         <div class="form-group">
             <label>Password</label>
-            <InputText @bind-Value="loginRequest.Password" type="password" class="form-control" />
+            <InputText @bind-Value="loginRequest.Password" type="password" class="form-control"
+                placeholder="Enter your password" />
         </div>
 
-        <button type="submit" class="btn btn-primary mt-3">Login</button>
-        <div class="mt-2">
-            <a href="/register">Don't have an account? Register</a>
+        <button type="submit" class="btn btn-primary">Log In</button>
+
+        <div class="auth-footer-link">
+            Need an account? <a href="/register">Register</a>
         </div>
     </EditForm>
 </div>

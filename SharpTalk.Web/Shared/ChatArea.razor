@@ -1,17 +1,25 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @implements IAsyncDisposable
 @inject ChatService ChatService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <div class="chat-area">
     <div class="messages-list" id="messagesList">
         @foreach (var msg in Messages)
         {
-            <div class="message-item">
-                <span class="message-author">@msg.Username</span>
-                <span class="message-timestamp">@msg.Timestamp.ToLocalTime().ToString("t")</span>
-                <div class="message-content">@msg.Content</div>
+            var isMine = msg.UserId == currentUserId;
+            <div class='message-item @(isMine ? "message-mine" : "message-others")'>
+                <div class="message-info">
+                    <span class="message-author">@msg.Username</span>
+                    <span class="message-timestamp">@msg.Timestamp.ToLocalTime().ToString("t")</span>
+                </div>
+                <div class="bubble-container">
+                    <div class="message-content">@msg.Content</div>
+                </div>
             </div>
         }
     </div>
@@ -27,8 +35,8 @@
 
     <div class="message-input">
         <form @onsubmit="SendMessage">
-            <input type="text" class="form-control" placeholder="Message #Channel" @value="newMessage"
-                @oninput="OnInput" />
+            <input type="text" class="form-control" placeholder="Message #Channel" @bind="newMessage"
+                @bind:event="oninput" />
         </form>
     </div>
 </div>
@@ -38,14 +46,31 @@
     public int ChannelId { get; set; }
 
     private List<MessageDto> Messages = new List<MessageDto>();
-    private string newMessage = string.Empty;
+    private string _newMessage = string.Empty;
+    private string newMessage
+    {
+        get => _newMessage;
+        set
+        {
+            if (_newMessage != value)
+            {
+                _newMessage = value;
+                HandleTyping();
+            }
+        }
+    }
     private int _currentChannelId;
+    private int currentUserId;
     private Dictionary<int, string> TypingUsers = new Dictionary<int, string>();
     private System.Timers.Timer? typingTimer;
     private bool isTypingSent = false;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userIdStr = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        int.TryParse(userIdStr, out currentUserId);
+
         ChatService.OnMessageReceived += HandleMessageReceived;
         ChatService.OnUserTyping += HandleUserTyping;
         await ChatService.InitializeAsync();
@@ -72,7 +97,7 @@
         }
     }
 
-    private void HandleMessageReceived(MessageDto message)
+    private async void HandleMessageReceived(MessageDto message)
     {
         if (message.ChannelId == ChannelId)
         {
@@ -82,11 +107,11 @@
             {
                 TypingUsers.Remove(message.UserId);
             }
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
-    private void HandleUserTyping(int channelId, int userId, string username, bool isTyping)
+    private async void HandleUserTyping(int channelId, int userId, string username, bool isTyping)
     {
         if (channelId == ChannelId)
         {
@@ -101,38 +126,48 @@
             {
                 TypingUsers.Remove(userId);
             }
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
-    private async Task OnInput(ChangeEventArgs e)
+    private void HandleTyping()
     {
-        newMessage = e.Value?.ToString() ?? string.Empty;
-        if (!isTypingSent && !string.IsNullOrWhiteSpace(newMessage))
+        if (string.IsNullOrWhiteSpace(newMessage)) return;
+
+        if (!isTypingSent)
         {
             isTypingSent = true;
-            await ChatService.SendTypingIndicatorAsync(ChannelId, true);
+            _ = ChatService.SendTypingIndicatorAsync(ChannelId, true);
+        }
 
-            typingTimer?.Stop();
+        if (typingTimer == null)
+        {
             typingTimer = new System.Timers.Timer(3000);
+            typingTimer.AutoReset = false;
             typingTimer.Elapsed += async (s, args) =>
             {
                 isTypingSent = false;
                 await ChatService.SendTypingIndicatorAsync(ChannelId, false);
-                typingTimer.Stop();
+                await InvokeAsync(StateHasChanged);
             };
-            typingTimer.Start();
         }
+        else
+        {
+            typingTimer.Stop();
+        }
+        typingTimer.Start();
     }
 
     private async Task SendMessage()
     {
         if (!string.IsNullOrWhiteSpace(newMessage))
         {
-            await ChatService.SendMessageAsync(ChannelId, newMessage);
+            var content = newMessage;
             newMessage = string.Empty;
             isTypingSent = false;
             typingTimer?.Stop();
+
+            await ChatService.SendMessageAsync(ChannelId, content);
             await ChatService.SendTypingIndicatorAsync(ChannelId, false);
         }
     }

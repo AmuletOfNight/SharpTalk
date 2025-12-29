@@ -26,8 +26,14 @@ public class ChatHub : Hub
         var userId = GetUserId();
         if (userId > 0)
         {
-            await _redis.SetAddAsync("online_users", userId);
-            await NotifyPresenceChanged(userId, "Online");
+            var userConnectionsKey = $"user_connections:{userId}";
+            await _redis.SetAddAsync(userConnectionsKey, Context.ConnectionId);
+
+            // Only notify online if this is the first set addition (race-condition safe)
+            if (await _redis.SetAddAsync("online_users", userId))
+            {
+                await NotifyPresenceChanged(userId, "Online");
+            }
         }
         await base.OnConnectedAsync();
     }
@@ -37,8 +43,16 @@ public class ChatHub : Hub
         var userId = GetUserId();
         if (userId > 0)
         {
-            await _redis.SetRemoveAsync("online_users", userId);
-            await NotifyPresenceChanged(userId, "Offline");
+            var userConnectionsKey = $"user_connections:{userId}";
+            await _redis.SetRemoveAsync(userConnectionsKey, Context.ConnectionId);
+
+            // Only notify offline if this was the last connection
+            var connectionCount = await _redis.SetLengthAsync(userConnectionsKey);
+            if (connectionCount == 0)
+            {
+                await _redis.SetRemoveAsync("online_users", userId);
+                await NotifyPresenceChanged(userId, "Offline");
+            }
         }
         await base.OnDisconnectedAsync(exception);
     }
@@ -50,6 +64,27 @@ public class ChatHub : Hub
     }
 
     private string GetUsername() => Context.User?.FindFirst(ClaimTypes.Name)?.Value ?? "Unknown";
+
+    private async Task<bool> IsUserInChannel(int userId, int channelId)
+    {
+        var channel = await _context.Channels.FindAsync(channelId);
+        if (channel == null) return false;
+
+        // Must be in workspace
+        var inWorkspace = await _context.WorkspaceMembers
+            .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
+
+        if (!inWorkspace) return false;
+
+        // If private, must be in ChannelMembers
+        if (channel.IsPrivate)
+        {
+            return await _context.ChannelMembers
+                .AnyAsync(cm => cm.ChannelId == channelId && cm.UserId == userId);
+        }
+
+        return true;
+    }
 
     private async Task NotifyPresenceChanged(int userId, string status)
     {
@@ -89,17 +124,7 @@ public class ChatHub : Hub
     {
         var userId = GetUserId();
 
-        // [SECURITY] Verify user is member of the workspace for this channel
-        var channel = await _context.Channels.FindAsync(channelId);
-        if (channel == null)
-        {
-            throw new HubException("Channel not found.");
-        }
-
-        var isMember = await _context.WorkspaceMembers
-            .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
-
-        if (!isMember)
+        if (!await IsUserInChannel(userId, channelId))
         {
             throw new HubException("Unauthorized access to channel.");
         }
@@ -120,13 +145,7 @@ public class ChatHub : Hub
         // [SECURITY] Re-verify membership (optional optimization: assume JoinChannel checked it, but safer to check or rely on DB constraints)
         // For performance, we might rely on the fact they are in the group, but saving to DB requires validation.
 
-        var channel = await _context.Channels.FindAsync(channelId);
-        if (channel == null) return;
-
-        var isMember = await _context.WorkspaceMembers
-             .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
-
-        if (!isMember) return;
+        if (!await IsUserInChannel(userId, channelId)) return;
 
         // Save to DB
         var message = new Message

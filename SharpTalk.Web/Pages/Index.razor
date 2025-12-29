@@ -20,13 +20,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (authenticationStateTask != null)
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
         {
-            var authState = await authenticationStateTask;
-            if (authState.User.Identity?.IsAuthenticated == true)
-            {
-                Navigation.NavigateTo("/home");
-            }
+            Navigation.NavigateTo("/home");
         }
     }
 }

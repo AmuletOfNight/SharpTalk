@@ -26,33 +26,51 @@ public class ChatService : IAsyncDisposable
 
     public async Task InitializeAsync()
     {
-        _hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost:5298/chatHub", options =>
-            {
-                options.AccessTokenProvider = async () =>
+        if (_hubConnection != null && _hubConnection.State != HubConnectionState.Disconnected) return;
+
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        if (string.IsNullOrEmpty(token)) return;
+
+        if (_hubConnection == null)
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl("http://localhost:5298/chatHub", options =>
                 {
-                    return await _localStorage.GetItemAsync<string>("authToken");
-                };
-            })
-            .WithAutomaticReconnect()
-            .Build();
+                    options.AccessTokenProvider = async () =>
+                    {
+                        return await _localStorage.GetItemAsync<string>("authToken");
+                    };
+                })
+                .WithAutomaticReconnect()
+                .Build();
 
-        _hubConnection.On<MessageDto>("ReceiveMessage", (message) =>
+            _hubConnection.On<MessageDto>("ReceiveMessage", (message) =>
+            {
+                OnMessageReceived?.Invoke(message);
+            });
+
+            _hubConnection.On<UserStatusDto>("UserStatusChanged", (status) =>
+            {
+                OnUserStatusChanged?.Invoke(status);
+            });
+
+            _hubConnection.On<int, int, string, bool>("UserTyping", (channelId, userId, username, isTyping) =>
+            {
+                OnUserTyping?.Invoke(channelId, userId, username, isTyping);
+            });
+        }
+
+        try
         {
-            OnMessageReceived?.Invoke(message);
-        });
-
-        _hubConnection.On<UserStatusDto>("UserStatusChanged", (status) =>
+            if (_hubConnection.State == HubConnectionState.Disconnected)
+            {
+                await _hubConnection.StartAsync();
+            }
+        }
+        catch (Exception ex)
         {
-            OnUserStatusChanged?.Invoke(status);
-        });
-
-        _hubConnection.On<int, int, string, bool>("UserTyping", (channelId, userId, username, isTyping) =>
-        {
-            OnUserTyping?.Invoke(channelId, userId, username, isTyping);
-        });
-
-        await _hubConnection.StartAsync();
+            Console.WriteLine($"Error starting hub connection: {ex.Message}");
+        }
     }
 
     public async Task JoinWorkspaceAsync(int workspaceId)
