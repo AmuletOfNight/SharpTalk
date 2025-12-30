@@ -1,4 +1,5 @@
 ﻿@using SharpTalk.Shared.DTOs
+@using SharpTalk.Shared.Enums
 @using SharpTalk.Web.Services
 @using SharpTalk.Web.Shared
 @inherits LayoutComponentBase
@@ -39,6 +40,7 @@
         }
 
     <WorkspaceSettingsModal @ref="WorkspaceSettingsModalRef" Workspace="CurrentWorkspace" IsOwner="IsWorkspaceOwner" OnWorkspaceChanged="HandleWorkspaceChanged" />
+    <GroupDMSettingsModal @ref="GroupDMSettingsModalRef" Channel="CurrentChannel" OnSettingsClosed="HandleGroupSettingsClosed" OnGroupLeft="HandleGroupLeft" />
 
         @if (IsLoading)
         {
@@ -58,7 +60,8 @@
         else if (ActiveWorkspaceId == -2)
         {
             <div class="channel-sidebar @(isMobile && currentMobileView == MobileView.ChannelList ? "mobile-visible" : "")">
-                <DirectMessagesList ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
+                <DirectMessagesList @ref="DirectMessagesListRef"
+                                    ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
                                     OnChannelSelected="HandleChannelSelected" />
             </div>
         }
@@ -88,7 +91,7 @@
                 }
                 else if (CurrentChannel != null)
                 {
-                    <ChatArea Channel="CurrentChannel" />
+                    <ChatArea Channel="CurrentChannel" OnOpenGroupSettings="OpenGroupSettings" />
                 }
                 else if (ActiveWorkspaceId == -2 && CurrentChannel == null)
                 {
@@ -132,6 +135,8 @@
     private bool isMobile = false;
     private DotNetObjectReference<MainLayout>? objRef;
     private WorkspaceSettingsModal? WorkspaceSettingsModalRef;
+    private GroupDMSettingsModal? GroupDMSettingsModalRef;
+    private DirectMessagesList? DirectMessagesListRef;
     private bool IsWorkspaceOwner => CurrentWorkspace?.OwnerId == UserService.CurrentUser?.Id;
 
     protected override async Task OnInitializedAsync()
@@ -413,5 +418,32 @@
                 StateHasChanged();
             }
         }
+    }
+
+    private void OpenGroupSettings(ChannelDto channel)
+    {
+        if (channel.Type == ChannelType.Group)
+        {
+            GroupDMSettingsModalRef?.Open();
+        }
+    }
+
+    private void HandleGroupSettingsClosed()
+    {
+        StateHasChanged();
+    }
+
+    private async Task HandleGroupLeft()
+    {
+        // User left the group, clear current channel and refresh DM list
+        CurrentChannel = null;
+        
+        // If we're on the DM list view (ActiveWorkspaceId == -2), refresh the list
+        if (ActiveWorkspaceId == -2)
+        {
+            await DirectMessagesListRef?.RefreshDMs();
+        }
+        
+        await InvokeAsync(StateHasChanged);
     }
 }

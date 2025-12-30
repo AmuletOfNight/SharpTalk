@@ -54,6 +54,21 @@ public static class ChatConstants
     /// Typing indicator fade-out animation duration in milliseconds
     /// </summary>
     public const int TypingFadeOutDurationMs = 300;
+
+    /// <summary>
+    /// Minimum number of members required in a group DM (including creator)
+    /// </summary>
+    public const int GroupDMMinMembers = 3;
+
+    /// <summary>
+    /// Maximum number of members allowed in a group DM (including creator)
+    /// </summary>
+    public const int GroupDMMaxMembers = 9;
+
+    /// <summary>
+    /// Maximum number of additional members that can be added (excluding creator)
+    /// </summary>
+    public const int GroupDMMaxAdditionalMembers = 8;
 }
 
 /// <summary>

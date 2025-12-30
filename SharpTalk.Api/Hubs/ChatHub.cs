@@ -125,11 +125,17 @@ public class ChatHub : Hub
 
         bool hasAccess = false;
 
-        // Must be in workspace if it belongs to one
+        // For global DMs (WorkspaceId == null), skip workspace check
+        // For workspace channels, must be in workspace
         if (channel.WorkspaceId.HasValue)
         {
             hasAccess = await _context.WorkspaceMembers
                 .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
+        }
+        else
+        {
+            // Global channel - assume access pending ChannelMembers check
+            hasAccess = true;
         }
 
         // If private, must be in ChannelMembers

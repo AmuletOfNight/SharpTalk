@@ -75,4 +75,71 @@ public class ChannelService
         }
         return null;
     }
+
+    #region Group DM Methods
+
+    public async Task<ChannelDto?> CreateGroupDMAsync(CreateGroupDMRequest request)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsJsonAsync("api/channel/groupdm", request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<ChannelDto>();
+        }
+
+        return null;
+    }
+
+    public async Task<ChannelDto?> AddGroupMemberAsync(AddGroupMemberRequest request)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsJsonAsync("api/channel/groupdm/members", request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<ChannelDto>();
+        }
+
+        return null;
+    }
+
+    public async Task<bool> RemoveGroupMemberAsync(int channelId, int userId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/channel/groupdm/{channelId}/members/{userId}");
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<ChannelDto?> UpdateGroupNameAsync(int channelId, string name)
+    {
+        await SetAuthHeader();
+        var request = new UpdateGroupNameRequest { ChannelId = channelId, Name = name };
+        var response = await _httpClient.PutAsJsonAsync($"api/channel/groupdm/{channelId}/name", request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<ChannelDto>();
+        }
+
+        return null;
+    }
+
+    public async Task<List<GroupMemberDto>> GetGroupMembersAsync(int channelId)
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<GroupMemberDto>>($"api/channel/groupdm/{channelId}/members") ?? new List<GroupMemberDto>();
+    }
+
+    public async Task<bool> LeaveGroupAsync(int channelId)
+    {
+        await SetAuthHeader();
+        var request = new LeaveGroupRequest { ChannelId = channelId };
+        var response = await _httpClient.PostAsJsonAsync($"api/channel/groupdm/{channelId}/leave", request);
+
+        return response.IsSuccessStatusCode;
+    }
+
+    #endregion
 }

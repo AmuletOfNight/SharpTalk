@@ -11,8 +11,36 @@
 @inject IJSRuntime JSRuntime
 @inject UrlUtilityService UrlUtilityService
 @inject UserService UserService
+@inject ChannelService ChannelService
 
 <div class="chat-area">
+    @if (Channel?.Type == ChannelType.Group)
+    {
+        <div class="group-dm-header">
+            <div class="group-dm-info">
+                <div class="group-dm-avatar-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div class="group-dm-name">@Channel.Name</div>
+                    <div class="group-dm-members">@Channel.MemberCount members</div>
+                </div>
+            </div>
+            <div class="group-dm-actions">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="OpenGroupSettings" title="Group Settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    }
     <div class="messages-list" id="messagesList">
         @foreach (var msg in Messages)
         {
@@ -174,6 +202,9 @@
 @code {
     [Parameter]
     public ChannelDto? Channel { get; set; }
+
+    [Parameter]
+    public EventCallback<ChannelDto> OnOpenGroupSettings { get; set; }
 
     private int ChannelId => Channel?.Id ?? 0;
 
@@ -582,6 +613,14 @@
     private bool CanSendMessage()
     {
         return !string.IsNullOrWhiteSpace(newMessage) || selectedFiles.Any();
+    }
+
+    private void OpenGroupSettings()
+    {
+        if (Channel != null)
+        {
+            OnOpenGroupSettings.InvokeAsync(Channel);
+        }
     }
 
     public async ValueTask DisposeAsync()

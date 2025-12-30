@@ -70,9 +70,48 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
 
 ## Current Task
 - [ ] **Group Direct Messages**
-    - [ ] Add `GroupDM` ChannelType enum value
-    - [ ] Create Group DM endpoint with shared workspace validation
-    - [ ] Create multi-select user modal in frontend
-    - [ ] Update DM list to display Group DMs with stacked avatars
-    - [ ] Add unit tests for Group DM functionality
+    - [ ] **Data Layer**
+        - [ ] Add `Group` value to ChannelType enum
+        - [ ] Create CreateGroupDMRequest DTO
+        - [ ] Create GroupMemberDto DTO
+        - [ ] Create AddGroupMemberRequest DTO
+        - [ ] Create RemoveGroupMemberRequest DTO
+        - [ ] Create UpdateGroupNameRequest DTO
+        - [ ] Update ChannelDto with group properties (Members, MemberCount, IsGroup)
+        - [ ] Add GroupDM constants to ChatConstants.cs
+    - [ ] **Backend - API**
+        - [ ] Add CreateGroupDM POST endpoint
+        - [ ] Add AddGroupMember POST endpoint
+        - [ ] Add RemoveGroupMember DELETE endpoint
+        - [ ] Add UpdateGroupName PUT endpoint
+        - [ ] Add GetGroupMembers GET endpoint
+        - [ ] Update GetDirectMessages to include group DMs
+        - [ ] Update SendMessage validation for group DMs
+    - [ ] **Backend - SignalR Hub**
+        - [ ] Add AddGroupMember method with notifications
+        - [ ] Add RemoveGroupMember method with notifications
+        - [ ] Add UpdateGroupName method with notifications
+    - [ ] **Frontend - Services**
+        - [ ] Add CreateGroupDMAsync method
+        - [ ] Add AddGroupMemberAsync method
+        - [ ] Add RemoveGroupMemberAsync method
+        - [ ] Add UpdateGroupNameAsync method
+        - [ ] Add GetGroupMembersAsync method
+    - [ ] **Frontend - Components**
+        - [ ] Create StartGroupDMModal with multi-select UI
+        - [ ] Create GroupDMSettingsModal for member management
+        - [ ] Create GroupAvatarStack component for stacked avatars
+        - [ ] Update DirectMessagesList to display group DMs
+        - [ ] Update ChatArea with group DM header and settings
+    - [ ] **Styling**
+        - [ ] Add CSS for stacked avatar display
+        - [ ] Add CSS for group DM list items
+        - [ ] Add CSS for multi-select user interface
+    - [ ] **Testing**
+        - [ ] Write unit tests for Group DM controller endpoints
+        - [ ] Write unit tests for ChannelService methods
+        - [ ] Write integration tests for SignalR group operations
+    - [ ] **Documentation**
+        - [ ] Update API documentation
+        - [ ] Add user documentation
 

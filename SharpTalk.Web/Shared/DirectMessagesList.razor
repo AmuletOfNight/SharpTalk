@@ -10,13 +10,24 @@
 <div class="channel-list">
     <div class="workspace-name-header">
         <h5>Direct Messages</h5>
-        <button class="btn btn-sm btn-link text-white p-0" @onclick="OpenStartDMModal">
-             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
+        <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-link text-white p-0" @onclick="OpenStartGroupDMModal" title="Create Group DM">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+            </button>
+            <button class="btn btn-sm btn-link text-white p-0" @onclick="OpenStartDMModal" title="New Direct Message">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-        </button>
+            </button>
+        </div>
     </div>
 
     <div class="p-2">
@@ -27,15 +38,27 @@
         <ul class="list-group list-group-flush">
              @foreach (var channel in Channels)
             {
+                var isGroup = channel.Type == ChannelType.Group;
                  <li class="channel-item @(ActiveChannelId == channel.Id ? "active" : "")"
                 @onclick="() => SelectChannel(channel)">
                     <div class="d-flex align-items-center w-100">
                      <div class="member-avatar-wrapper me-2">
-                             @if (!string.IsNullOrEmpty(channel.AvatarUrl))
+                             @if (isGroup)
                              {
-                                 <img src="@UrlUtilityService.GetAvatarUrl(channel.AvatarUrl, "s")" 
-                                      class="member-avatar-list @(channel.UserStatus.ToLower())" 
-                                      style="background-color: #5865f2;" 
+                                 <div class="group-dm-avatar">
+                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                         <circle cx="9" cy="7" r="4"></circle>
+                                         <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                     </svg>
+                                 </div>
+                             }
+                             else if (!string.IsNullOrEmpty(channel.AvatarUrl))
+                             {
+                                 <img src="@UrlUtilityService.GetAvatarUrl(channel.AvatarUrl, "s")"
+                                      class="member-avatar-list @(channel.UserStatus.ToLower())"
+                                      style="background-color: #5865f2;"
                                       alt="@channel.Name" />
                              }
                              else
@@ -46,7 +69,13 @@
                              }
                         </div>
                         <div class="d-flex flex-column" style="min-width: 0; flex: 1;">
-                            <span class="text-truncate fw-bold">@channel.Name</span>
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="text-truncate fw-bold">@channel.Name</span>
+                                @if (isGroup)
+                                {
+                                    <span class="badge bg-secondary" style="font-size: 0.65rem;">@channel.MemberCount</span>
+                                }
+                            </div>
                             @if (!string.IsNullOrEmpty(channel.Description))
                             {
                                  <small class="text-muted text-truncate">@channel.Description</small>
@@ -60,6 +89,7 @@
 </div>
 
 <StartDirectMessageModal @ref="StartDMModal" WorkspaceId="0" OnChannelCreated="OnChannelCreated" />
+<StartGroupDMModal @ref="StartGroupDMModal" WorkspaceId="0" OnGroupCreated="OnGroupCreated" />
 
 @implements IDisposable
 
@@ -72,6 +102,7 @@
 
     private List<ChannelDto> Channels = new List<ChannelDto>();
     private StartDirectMessageModal? StartDMModal;
+    private StartGroupDMModal? StartGroupDMModal;
     
     protected override async Task OnInitializedAsync()
     {
@@ -83,6 +114,12 @@
     private async Task LoadDMs()
     {
         Channels = await ChannelService.GetDirectMessagesAsync();
+    }
+
+    public async Task RefreshDMs()
+    {
+        await LoadDMs();
+        await InvokeAsync(StateHasChanged);
     }
 
     private void HandleMessageReceived(MessageDto message)
@@ -129,7 +166,21 @@
         StartDMModal?.Open();
     }
 
+    private void OpenStartGroupDMModal()
+    {
+        StartGroupDMModal?.Open();
+    }
+
     private async Task OnChannelCreated(ChannelDto newChannel)
+    {
+        if (!Channels.Any(c => c.Id == newChannel.Id))
+        {
+            Channels.Insert(0, newChannel);
+        }
+        await SelectChannel(newChannel);
+    }
+
+    private async Task OnGroupCreated(ChannelDto newChannel)
     {
         if (!Channels.Any(c => c.Id == newChannel.Id))
         {

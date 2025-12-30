@@ -1,0 +1,37 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject UrlUtilityService UrlUtilityService
+
+<div class="group-avatar-stack">
+    @{
+        var displayMembers = Members.Take(MaxDisplay).ToList();
+        var remaining = Members.Count - MaxDisplay;
+    }
+    
+    @foreach (var member in displayMembers)
+    {
+        <div class="avatar-item">
+            <img src="@UrlUtilityService.GetAvatarUrl(member.AvatarUrl, "s")" 
+                 class="member-avatar-stack @(member.Status.ToLower())" 
+                 alt="@member.Username"
+                 title="@member.Username" />
+        </div>
+    }
+    
+    @if (remaining > 0)
+    {
+        <div class="avatar-item remaining-count">
+            <div class="member-avatar-stack count-badge">
+                +@remaining
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<GroupMemberDto> Members { get; set; } = new();
+
+    [Parameter]
+    public int MaxDisplay { get; set; } = 4;
+}

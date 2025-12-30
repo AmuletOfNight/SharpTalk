@@ -14,4 +14,9 @@ public class ChannelDto
     public bool CanMessage { get; set; } = true;
     public string UserStatus { get; set; } = "Offline"; // For DM channels: Online, Offline, Away
     public int? TargetUserId { get; set; } // For DM channels: the other user's ID
+    
+    // Group DM properties
+    public List<GroupMemberDto>? Members { get; set; }
+    public int MemberCount { get; set; }
+    public bool IsGroup => Type == ChannelType.Group;
 }

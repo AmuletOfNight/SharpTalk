@@ -1,0 +1,360 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Shared.Enums
+@using SharpTalk.Web.Services
+@inject ChannelService ChannelService
+@inject WorkspaceService WorkspaceService
+@inject UrlUtilityService UrlUtilityService
+
+@if (Show)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Group DM Settings</h5>
+                    <button type="button" class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center p-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Group Name</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" @bind="EditName" @bind:event="oninput" maxlength="100" />
+                                <button class="btn btn-outline-primary" type="button" @onclick="UpdateName" disabled="@isUpdating">
+                                    Save
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrEmpty(Channel?.Name) && EditName != Channel.Name)
+                            {
+                                <small class="text-muted">Press Save to apply changes</small>
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Members (@(Members.Count))</label>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="OpenAddMember">
+                                    + Add Member
+                                </button>
+                            </div>
+                            
+                            <div class="members-list" style="max-height: 250px; overflow-y: auto;">
+                                @foreach (var member in Members)
+                                {
+                                    <div class="d-flex align-items-center p-2 border-bottom">
+                                        <div class="member-avatar-wrapper me-3">
+                                            <img src="@UrlUtilityService.GetAvatarUrl(member.AvatarUrl, "s")" 
+                                                 class="member-avatar-list @(member.Status.ToLower())" 
+                                                 alt="@member.Username" />
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-bold">@member.Username</div>
+                                            <small class="text-muted">Joined @member.JoinedAt.ToLocalTime().ToString("g")</small>
+                                        </div>
+                                        @if (member.UserId != CurrentUserId)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveMember(member)">
+                                                Remove
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">You</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger me-auto" @onclick="LeaveGroup">
+                        Leave Group
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="Close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAddMemberModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Member</h5>
+                    <button type="button" class="btn-close" @onclick="CloseAddMember"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" placeholder="Search users..." 
+                               @bind="searchTerm" @bind:event="oninput" />
+                    </div>
+                    
+                    <div class="user-select-list" style="max-height: 300px; overflow-y: auto;">
+                        @if (isSearching)
+                        {
+                            <div class="text-center p-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            var filteredUsers = AvailableUsers.Where(u => u.Username.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+                            @if (!filteredUsers.Any())
+                            {
+                                <div class="text-muted text-center p-3">No users found</div>
+                            }
+                            else
+                            {
+                                @foreach (var user in filteredUsers)
+                                {
+                                    <button class="list-group-item list-group-item-action d-flex align-items-center"
+                                            @onclick="() => AddMember(user)">
+                                        <div class="member-avatar-wrapper me-3">
+                                            <img src="@UrlUtilityService.GetAvatarUrl(user.AvatarUrl, "s")" 
+                                                 class="member-avatar-list @(user.Status.ToLower())" 
+                                                 alt="@user.Username" />
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">@user.Username</div>
+                                        </div>
+                                    </button>
+                                }
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ChannelDto? Channel { get; set; }
+
+    [Parameter]
+    public EventCallback OnSettingsClosed { get; set; }
+
+    [Parameter]
+    public EventCallback OnGroupLeft { get; set; }
+
+    [Inject] AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+
+    private bool Show = false;
+    private bool isLoading = false;
+    private bool isUpdating = false;
+    private bool showAddMemberModal = false;
+    private bool isSearching = false;
+    private string searchTerm = "";
+    private string editName = "";
+    private List<GroupMemberDto> Members = new List<GroupMemberDto>();
+    private List<UserStatusDto> AvailableUsers = new List<UserStatusDto>();
+    private int CurrentUserId;
+
+    private string EditName
+    {
+        get => editName;
+        set
+        {
+            editName = value;
+            StateHasChanged();
+        }
+    }
+
+    public void Open()
+    {
+        if (Channel != null)
+        {
+            Show = true;
+            editName = Channel.Name;
+            LoadMembers();
+            LoadAvailableUsers();
+        }
+    }
+
+    public void Close()
+    {
+        Show = false;
+        showAddMemberModal = false;
+        OnSettingsClosed.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private async void LoadMembers()
+    {
+        if (Channel == null) return;
+        
+        isLoading = true;
+        try
+        {
+            Members = await ChannelService.GetGroupMembersAsync(Channel.Id);
+        }
+        catch (Exception)
+        {
+            // Handle error
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async void LoadAvailableUsers()
+    {
+        isSearching = true;
+        try
+        {
+            List<UserStatusDto> allUsersInfo = new List<UserStatusDto>();
+            
+            // Fetch from all workspaces
+            var workspaces = await WorkspaceService.GetMyWorkspacesAsync();
+            foreach (var ws in workspaces)
+            {
+                var members = await WorkspaceService.GetWorkspaceMembersAsync(ws.Id);
+                allUsersInfo.AddRange(members);
+            }
+            
+            // Get current member user IDs
+            var currentMemberIds = Members.Select(m => m.UserId).ToHashSet();
+            
+            // Filter out users already in the group
+            AvailableUsers = allUsersInfo
+                .Where(u => !currentMemberIds.Contains(u.UserId))
+                .GroupBy(u => u.UserId)
+                .Select(g => g.First())
+                .ToList();
+        }
+        catch (Exception)
+        {
+            AvailableUsers = new List<UserStatusDto>();
+        }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateName()
+    {
+        if (Channel == null || string.IsNullOrWhiteSpace(EditName)) return;
+
+        isUpdating = true;
+        try
+        {
+            var result = await ChannelService.UpdateGroupNameAsync(Channel.Id, EditName.Trim());
+            if (result != null)
+            {
+                Channel.Name = result.Name;
+            }
+        }
+        catch (Exception)
+        {
+            // Handle error
+        }
+        finally
+        {
+            isUpdating = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenAddMember()
+    {
+        showAddMemberModal = true;
+        searchTerm = "";
+        StateHasChanged();
+    }
+
+    private void CloseAddMember()
+    {
+        showAddMemberModal = false;
+        StateHasChanged();
+    }
+
+    private async Task AddMember(UserStatusDto user)
+    {
+        if (Channel == null) return;
+
+        try
+        {
+            var request = new AddGroupMemberRequest { ChannelId = Channel.Id, UserId = user.UserId };
+            var result = await ChannelService.AddGroupMemberAsync(request);
+            if (result != null)
+            {
+                CloseAddMember();
+                LoadMembers();
+            }
+        }
+        catch (Exception)
+        {
+            // Handle error
+        }
+    }
+
+    private async Task RemoveMember(GroupMemberDto member)
+    {
+        if (Channel == null) return;
+
+        try
+        {
+            var success = await ChannelService.RemoveGroupMemberAsync(Channel.Id, member.UserId);
+            if (success)
+            {
+                LoadMembers();
+            }
+        }
+        catch (Exception)
+        {
+            // Handle error
+        }
+    }
+
+    private async Task LeaveGroup()
+    {
+        if (Channel == null) return;
+
+        try
+        {
+            var success = await ChannelService.LeaveGroupAsync(Channel.Id);
+            if (success)
+            {
+                Close();
+                // Notify parent to refresh DM list and navigate away
+                await OnGroupLeft.InvokeAsync();
+            }
+        }
+        catch (Exception)
+        {
+            // Handle error
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userIdStr = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdStr, out int userId))
+        {
+            CurrentUserId = userId;
+        }
+    }
+}
