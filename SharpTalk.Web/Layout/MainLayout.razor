@@ -4,12 +4,12 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 
-<div class="page">
+<div class="page @(isMobile ? "is-mobile" : "is-desktop")">
     @if (IsAuthenticated)
     {
         @if (isMobile)
         {
-            <MobileNavigation CurrentView="currentMobileView" OnBack="GoBack" OnMenuToggle="ToggleMenu" />
+            <MobileNavigation CurrentView="currentMobileView" OnBack="GoBack" OnMenuToggle="ToggleMenu" CurrentChannel="CurrentChannel" CurrentWorkspace="CurrentWorkspace" />
         }
 
         <div class="sidebar @(isMobile && currentMobileView == MobileView.WorkspaceList ? "mobile-visible" : "")">
@@ -33,7 +33,12 @@
                 }
             </div>
         </div>
-        <UserProfile />
+        @if (!isMobile || currentMobileView != MobileView.ChatArea)
+        {
+            <UserProfile />
+        }
+
+    <WorkspaceSettingsModal @ref="WorkspaceSettingsModalRef" Workspace="CurrentWorkspace" IsOwner="IsWorkspaceOwner" OnWorkspaceChanged="HandleWorkspaceChanged" />
 
         @if (IsLoading)
         {
@@ -67,7 +72,7 @@
         }
 
         <main class="@(isMobile && currentMobileView == MobileView.ChatArea ? "mobile-visible" : "")">
-            <article class="content px-4">
+            <article class="content">
                 @if (IsLoading)
                 {
                     <div class="chat-area">
@@ -103,7 +108,7 @@
     }
     else
     {
-        <main>
+        <main class="mobile-visible">
             @Body
         </main>
     }
@@ -125,6 +130,9 @@
     private int ActiveWorkspaceId = -1;
     private MobileView currentMobileView = MobileView.WorkspaceList;
     private bool isMobile = false;
+    private DotNetObjectReference<MainLayout>? objRef;
+    private WorkspaceSettingsModal? WorkspaceSettingsModalRef;
+    private bool IsWorkspaceOwner => CurrentWorkspace?.OwnerId == UserService.CurrentUser?.Id;
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,7 +152,26 @@
     {
         if (firstRender)
         {
+            objRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("registerMobileViewCallback", objRef);
             await CheckMobileView();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnMobileViewChanged(bool mobile)
+    {
+        if (isMobile != mobile)
+        {
+            isMobile = mobile;
+            if (isMobile)
+            {
+                // Determine best initial view when switching to mobile
+                if (CurrentChannel != null) currentMobileView = MobileView.ChatArea;
+                else if (CurrentWorkspace != null || ActiveWorkspaceId == -2) currentMobileView = MobileView.ChannelList;
+                else currentMobileView = MobileView.WorkspaceList;
+            }
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -211,6 +238,7 @@
     public void Dispose()
     {
         AuthStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
+        objRef?.Dispose();
     }
 
     private async Task HandleWorkspaceSelected(int workspaceId)
@@ -235,20 +263,9 @@
                  if (user != null && user.AutoOpenLastChannel)
                  {
                      var lastChannelId = await LocalStorage.GetItemAsync<int?>($"workspace_{workspaceId}_lastChannel");
-                     // We need to verify this channel exists in the workspace.
-                     // But we don't have the channel list here yet. ChannelList component fetches it.
-                     // Actually, we can fetch channels to verify, or pass this "Suggestion" to ChannelList?
-                     // Or just set CurrentChannel based on ID and let UI handle if it fails (lazy load).
-                     // Better: We should probably fetch channels here if we want to determine initial channel.
-                     // OR, simply: Don't set CurrentChannel yet. Let ChannelList component handle "Auto Select Last" if specific logic is preferred.
-                     // But "ChannelList" is only rendered IF CurrentWorkspace is not null.
-                     // If we want to "Drop user into last channel", we need `CurrentChannel` to be non-null.
-                      
-                     // Let's try to fetch channel list for the workspace to be safe.
+                     
                      if (lastChannelId.HasValue)
                      {
-                         // Optimization: Just assume it's valid? No, might have been deleted.
-                         // Let's fetch.
                          var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
                          var channel = channels.FirstOrDefault(c => c.Id == lastChannelId.Value);
                          if (channel != null)
@@ -257,19 +274,12 @@
                          }
                          else
                          {
-                             // Default to general? Or null (show channel list)
-                             // User: "or have to have the user click on a channel"
-                             // If auto-open is ON, we should probably default to 'general' if last not found.
                              var general = channels.FirstOrDefault(c => c.Name == "general");
                              CurrentChannel = general;
                          }
                      }
                      else
                      {
-                         // No last channel, check if we should auto-open general?
-                         // "drop into the last channel they were in"
-                         // implies history. If no history, maybe just list?
-                         // Let's default to General for new workspaces if preference is ON.
                          var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
                          CurrentChannel = channels.FirstOrDefault(c => c.Name == "general");
                      }
@@ -282,18 +292,21 @@
         }
         
         // Mobile: Navigate to channel list when workspace is selected
-        if (isMobile && workspaceId > 0)
+        if (isMobile)
         {
-            SetMobileView(MobileView.ChannelList);
+            if (workspaceId > 0 || workspaceId == -2)
+            {
+                SetMobileView(MobileView.ChannelList);
+            }
+            else if (workspaceId == -1)
+            {
+                SetMobileView(MobileView.ChatArea);
+            }
         }
         
         StateHasChanged();
     }
     
-    // Note: workspace logic is async now so method signature changed from void to Task
-    // But modifying the callback from sidebar `EventCallback<int>` expects `Task` or `void`.
-    // Sidebar calls `OnWorkspaceSelected.InvokeAsync(id)`.
-
     private async void HandleChannelSelected(ChannelDto channel)
     {
         if (channel.WorkspaceId == null)
@@ -340,6 +353,12 @@
         if (mobileView != isMobile)
         {
             isMobile = mobileView;
+            if (isMobile)
+            {
+                if (CurrentChannel != null) currentMobileView = MobileView.ChatArea;
+                else if (CurrentWorkspace != null || ActiveWorkspaceId == -2) currentMobileView = MobileView.ChannelList;
+                else currentMobileView = MobileView.WorkspaceList;
+            }
             StateHasChanged();
         }
     }
@@ -371,11 +390,26 @@
                 // Already on workspace list, do nothing
                 break;
             case MobileView.ChannelList:
-                SetMobileView(MobileView.WorkspaceList);
+                // Open workspace settings modal
+                WorkspaceSettingsModalRef?.Open();
                 break;
             case MobileView.ChatArea:
                 SetMobileView(MobileView.ChannelList);
                 break;
+        }
+    }
+
+    private async Task HandleWorkspaceChanged()
+    {
+        // Reload workspace data when settings change
+        if (CurrentWorkspace != null)
+        {
+            var updatedWorkspace = await WorkspaceService.GetWorkspaceByIdAsync(CurrentWorkspace.Id);
+            if (updatedWorkspace != null)
+            {
+                CurrentWorkspace = updatedWorkspace;
+                StateHasChanged();
+            }
         }
     }
 }

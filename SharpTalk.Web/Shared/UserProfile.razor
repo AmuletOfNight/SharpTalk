@@ -5,7 +5,7 @@
 @inject IJSRuntime JSRuntime
 
 <div class="user-profile-container">
-    <div class="user-profile @(IsExpanded ? "expanded" : "")" 
+    <div class="user-profile"
          @onclick="HandleClick"
          @ref="userProfileElement">
         <div class="user-avatar-wrapper">
@@ -39,7 +39,6 @@
     private UserInfo? CurrentUser;
     private bool IsDropdownOpen = false;
     private bool IsDropdownVisible = false;
-    private bool IsExpanded = false;
     private UserSettingsModal? SettingsModal;
     private ElementReference userProfileElement;
 
@@ -71,16 +70,7 @@
 
     private void HandleClick()
     {
-        // On desktop or quick tap, toggle dropdown
-        if (!IsExpanded)
-        {
-            ToggleDropdown();
-        }
-        else
-        {
-            // If already expanded, clicking toggles dropdown
-            ToggleDropdown();
-        }
+        ToggleDropdown();
     }
 
     private void ToggleDropdown()

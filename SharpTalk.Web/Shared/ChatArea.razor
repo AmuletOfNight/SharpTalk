@@ -10,85 +10,63 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 @inject UrlUtilityService UrlUtilityService
+@inject UserService UserService
 
 <div class="chat-area">
-    <div class="channel-header">
-        <div class="d-flex align-items-center">
-            @if (Channel != null)
-            {
-                @if (Channel.Type == ChannelType.Direct)
-                {
-                    @if (!string.IsNullOrEmpty(Channel.AvatarUrl))
-                    {
-                         <img src="@UrlUtilityService.GetAvatarUrl(Channel.AvatarUrl, "s")" 
-                              class="header-avatar @(Channel.UserStatus.ToLower()) me-2" 
-                              alt="@Channel.Name" />
-                    }
-                    else
-                    {
-                        <div class="header-avatar-placeholder @(Channel.UserStatus.ToLower()) me-2">
-                            @(string.IsNullOrEmpty(Channel.Name) ? "?" : Channel.Name.Substring(0, 1).ToUpper())
-                        </div>
-                    }
-                    <h5 class="mb-0">@Channel.Name</h5>
-                }
-                else
-                {
-                     <span class="text-muted me-2 fs-4">@((Channel.IsPrivate) ? "🔒" : "#")</span>
-                     <div>
-                        <h5 class="mb-0">@Channel.Name</h5>
-                        @if (!string.IsNullOrEmpty(Channel.Description))
-                        {
-                            <small class="text-muted">@Channel.Description</small>
-                        }
-                     </div>
-                }
-            }
-        </div>
-    </div>
-
     <div class="messages-list" id="messagesList">
         @foreach (var msg in Messages)
         {
             var isMine = msg.UserId == currentUserId;
-            <div class='message-item @(isMine ? "message-mine" : "message-others")'>
-                <img src="@UrlUtilityService.GetAvatarUrl(msg.AvatarUrl, "s")"
-                     class="message-avatar @(msg.UserStatus.ToLower())"
-                     alt="@msg.Username" />
+            var isNew = msg.Timestamp > lastSentTimestamp;
+            var animationClass = isNew ? (isMine ? "fly-in" : "slide-in-left") : "";
+            
+            <div class='message-item @(isMine ? "message-mine" : "message-others") @animationClass'>
                 <div class="message-body">
-                    <div class="message-info">
-                        <span class="message-author">@msg.Username</span>
-                        <span class="message-timestamp">@msg.Timestamp.ToLocalTime().ToString("t")</span>
-                    </div>
-                    <div class="bubble-container">
-                        <div class="message-content">@msg.Content</div>
-                        @if (msg.Attachments.Any())
+                    <div class="message-content-wrapper">
+                        @if (!isMine)
                         {
-                            <div class="message-attachment-divider"></div>
-                            <div class="message-attachments">
-                                @foreach (var attachment in msg.Attachments)
-                                {
-                                    <div class="attachment-item">
-                                        @if (IsImage(attachment.FileType))
-                                        {
-                                            <img src="@UrlUtilityService.GetFileUrl(attachment.FileUrl)"
-                                                 class="attachment-image"
-                                                 alt="@attachment.FileName"
-                                                 @onclick="() => OpenImagePreview(attachment)" />
-                                        }
-                                        else
-                                        {
-                                            <div class="attachment-file" @onclick="() => DownloadFile(attachment)">
-                                                <span class="file-icon">@GetFileIcon(attachment.FileType)</span>
-                                                <div class="file-info">
-                                                    <span class="file-name">@attachment.FileName</span>
-                                                    <span class="file-size">@FormatFileSize(attachment.FileSize)</span>
+                            <img src="@UrlUtilityService.GetAvatarUrl(msg.AvatarUrl, "s")"
+                                 class="message-avatar @(msg.UserStatus.ToLower())"
+                                 alt="@msg.Username" />
+                        }
+                        <div class="bubble-container">
+                            <div class="message-author-inline">@msg.Username</div>
+                            <div class="message-content">@msg.Content</div>
+                            @if (msg.Attachments.Any())
+                            {
+                                <div class="message-attachment-divider"></div>
+                                <div class="message-attachments">
+                                    @foreach (var attachment in msg.Attachments)
+                                    {
+                                        <div class="attachment-item">
+                                            @if (IsImage(attachment.FileType))
+                                            {
+                                                <img src="@UrlUtilityService.GetFileUrl(attachment.FileUrl)"
+                                                     class="attachment-image"
+                                                     alt="@attachment.FileName"
+                                                     @onclick="() => OpenImagePreview(attachment)" />
+                                            }
+                                            else
+                                            {
+                                                <div class="attachment-file" @onclick="() => DownloadFile(attachment)">
+                                                    <span class="file-icon">@GetFileIcon(attachment.FileType)</span>
+                                                    <div class="file-info">
+                                                        <span class="file-name">@attachment.FileName</span>
+                                                        <span class="file-size">@FormatFileSize(attachment.FileSize)</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <div class="message-timestamp-inline">@msg.Timestamp.ToLocalTime().ToString("t")</div>
+                        </div>
+                        @if (isMine)
+                        {
+                            <img src="@UrlUtilityService.GetAvatarUrl(msg.AvatarUrl, "s")"
+                                 class="message-avatar @(msg.UserStatus.ToLower())"
+                                 alt="@msg.Username" />
                         }
                     </div>
                 </div>
@@ -97,10 +75,10 @@
     </div>
 
     <div class="typing-indicator">
-        @if (TypingUsers.Any())
+        @if (TypingUsers.Any() || isTypingFadingOut)
         {
-            <small class="text-muted italic">
-                @(string.Join(", ", TypingUsers.Values)) @(TypingUsers.Count == 1 ? "is" : "are") typing...
+            <small class="text-muted italic @(isTypingFadingOut ? "fade-out" : "")">
+                @((isTypingFadingOut ? lastTypingText : string.Join(", ", TypingUsers.Values))) @((isTypingFadingOut ? (lastTypingCount == 1 ? "is" : "are") : (TypingUsers.Count == 1 ? "is" : "are"))) typing...
             </small>
         }
     </div>
@@ -156,21 +134,23 @@
         {
 
             <form @onsubmit="SendMessage">
-                <div class="chat-input-container">
-                    <label class="attach-btn" title="Attach files">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                        </svg>
-                        <InputFile OnChange="HandleFileSelect" multiple accept="@string.Join(",", FileUploadConstants.AllowedMimeTypes)" />
-                    </label>
-                    <input type="text" class="message-input-field" placeholder="Message #@(Channel?.Name ?? "Channel")" @bind="newMessage"
-                        @bind:event="oninput" />
-                    <button type="submit" class="send-btn" title="Send message" disabled="@(!CanSendMessage())">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
-                    </button>
+                <div class="unified-chat-input">
+                    <div class="speech-bubble-input">
+                        <label class="attach-btn-inline" title="Attach files">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                            </svg>
+                            <InputFile OnChange="HandleFileSelect" multiple accept="@string.Join(",", FileUploadConstants.AllowedMimeTypes)" />
+                        </label>
+                        <input type="text" class="message-input-field" placeholder="Message #@(Channel?.Name ?? "Channel")" @bind="newMessage"
+                            @bind:event="oninput" />
+                        <button type="submit" class="send-btn" title="Send message" disabled="@(!CanSendMessage())">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </form>
         }
@@ -216,11 +196,15 @@
     private Dictionary<int, string> TypingUsers = new Dictionary<int, string>();
     private System.Timers.Timer? typingTimer;
     private bool isTypingSent = false;
+    private bool isTypingFadingOut = false;
+    private string? lastTypingText;
+    private int lastTypingCount = 0;
     private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
     private List<AttachmentDto> uploadedAttachments = new List<AttachmentDto>();
     private bool isUploading = false;
     private AttachmentDto? previewAttachment;
     private string? uploadErrorMessage;
+    private DateTime lastSentTimestamp = DateTime.MinValue;
 
     protected override async Task OnInitializedAsync()
     {
@@ -245,6 +229,10 @@
 
             _currentChannelId = ChannelId;
             Messages.Clear();
+            TypingUsers.Clear();
+            isTypingFadingOut = false;
+            lastTypingText = null;
+            lastTypingCount = 0;
 
             // Only load history and join if channel ID is valid
             if (ChannelId > 0)
@@ -253,6 +241,7 @@
                 var history = await ChatService.GetMessageHistoryAsync(ChannelId);
                 Messages.AddRange(history);
                 StateHasChanged();
+                await ScrollToBottom();
 
                 await ChatService.JoinChannelAsync(ChannelId);
             }
@@ -269,7 +258,10 @@
             {
                 TypingUsers.Remove(message.UserId);
             }
-            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(async () => {
+                StateHasChanged();
+                await ScrollToBottom();
+            });
         }
     }
 
@@ -277,18 +269,43 @@
     {
         if (channelId == ChannelId)
         {
+            // Store current typing text and count before any changes
+            var currentTypingText = TypingUsers.Any() ? string.Join(", ", TypingUsers.Values) : null;
+            var currentTypingCount = TypingUsers.Count;
+            
             if (isTyping)
             {
                 if (!TypingUsers.ContainsKey(userId))
                 {
                     TypingUsers[userId] = username;
+                    isTypingFadingOut = false;
                 }
             }
             else
             {
                 TypingUsers.Remove(userId);
             }
-            await InvokeAsync(StateHasChanged);
+
+            // Trigger fade-out animation when no more typing users
+            if (!TypingUsers.Any() && !isTypingFadingOut && currentTypingText != null)
+            {
+                // Store the last typing text and count before fading out
+                lastTypingText = currentTypingText;
+                lastTypingCount = currentTypingCount;
+                isTypingFadingOut = true;
+                await InvokeAsync(StateHasChanged);
+                
+                // Remove the indicator after animation completes
+                await Task.Delay(300);
+                isTypingFadingOut = false;
+                lastTypingText = null;
+                lastTypingCount = 0;
+                await InvokeAsync(StateHasChanged);
+            }
+            else if (TypingUsers.Any())
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
@@ -420,6 +437,7 @@
             {
                 try
                 {
+                    lastSentTimestamp = DateTime.UtcNow.AddSeconds(-1); // Set slightly before now to catch the incoming message
                     await ChatService.SendMessageAsync(ChannelId, content, attachmentIds);
                     await ChatService.SendTypingIndicatorAsync(ChannelId, false);
                 }
@@ -436,7 +454,13 @@
                 }
             }
             StateHasChanged();
+            await ScrollToBottom();
         }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", "messagesList");
     }
 
     private void HandleFileSelect(InputFileChangeEventArgs e)

@@ -22,6 +22,12 @@ public class WorkspaceService
         return await _httpClient.GetFromJsonAsync<List<WorkspaceDto>>("api/workspace") ?? new List<WorkspaceDto>();
     }
 
+    public async Task<WorkspaceDto?> GetWorkspaceByIdAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<WorkspaceDto>($"api/workspace/{workspaceId}");
+    }
+
     public async Task<bool> ReorderWorkspacesAsync(List<int> workspaceIds)
     {
         await SetAuthHeader();

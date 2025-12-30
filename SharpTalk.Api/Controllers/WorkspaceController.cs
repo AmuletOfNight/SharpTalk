@@ -69,6 +69,30 @@ public class WorkspaceController : ControllerBase
         return Ok(workspaces);
     }
 
+    [HttpGet("{workspaceId}")]
+    public async Task<ActionResult<WorkspaceDto>> GetWorkspaceById(int workspaceId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var isMember = await _context.WorkspaceMembers
+            .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+
+        if (!isMember) return Forbid();
+
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        if (workspace == null) return NotFound("Workspace not found");
+
+        return Ok(new WorkspaceDto
+        {
+            Id = workspace.Id,
+            Name = workspace.Name,
+            Description = workspace.Description,
+            OwnerId = workspace.OwnerId,
+            MemberCount = workspace.Members.Count,
+            CreatedAt = workspace.CreatedAt
+        });
+    }
+
     [HttpPost]
     public async Task<ActionResult<WorkspaceDto>> CreateWorkspace(CreateWorkspaceRequest request)
     {
