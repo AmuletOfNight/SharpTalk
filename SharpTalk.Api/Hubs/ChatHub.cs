@@ -277,7 +277,7 @@ public class ChatHub : Hub
         _logger.LogDebug("Connection {ConnectionId} left channel {ChannelId}", Context.ConnectionId, channelId);
     }
 
-    public async Task SendMessage(int channelId, string content, List<int> attachmentIds = null)
+    public async Task SendMessage(int channelId, string content, List<int>? attachmentIds = null)
     {
         var userId = GetUserId();
         var username = GetUsername();

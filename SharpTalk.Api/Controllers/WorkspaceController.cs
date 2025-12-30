@@ -195,7 +195,7 @@ public class WorkspaceController : ControllerBase
 
         var cacheKey = $"workspace_members_{workspaceId}";
         
-        if (_cache.TryGetValue(cacheKey, out List<UserStatusDto>? cachedMembers))
+        if (_cache.TryGetValue(cacheKey, out List<UserStatusDto>? cachedMembers) && cachedMembers != null)
         {
             // Update online status from Redis (gracefully handle Redis failures)
             try
@@ -268,7 +268,7 @@ public class WorkspaceController : ControllerBase
 
         var cacheKey = $"workspace_members_detailed_{workspaceId}";
         
-        if (_cache.TryGetValue(cacheKey, out List<WorkspaceMemberDto>? cachedMembers))
+        if (_cache.TryGetValue(cacheKey, out List<WorkspaceMemberDto>? cachedMembers) && cachedMembers != null)
         {
             // Update online status from Redis (gracefully handle Redis failures)
             try

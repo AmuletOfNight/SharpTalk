@@ -55,6 +55,11 @@
         if (response.IsSuccessStatusCode)
         {
             var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            if (authResponse == null)
+            {
+                ErrorMessage = "Failed to parse authentication response";
+                return;
+            }
             await LocalStorage.SetItemAsync("authToken", authResponse.Token);
             await ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticatedWithUserInfo(authResponse.Token,
             authResponse);

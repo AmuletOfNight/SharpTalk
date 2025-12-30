@@ -201,7 +201,6 @@
     private int lastTypingCount = 0;
     private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
     private List<AttachmentDto> uploadedAttachments = new List<AttachmentDto>();
-    private bool isUploading = false;
     private AttachmentDto? previewAttachment;
     private string? uploadErrorMessage;
     private DateTime lastSentTimestamp = DateTime.MinValue;
@@ -394,7 +393,6 @@
             List<int> attachmentIds = new List<int>();
             if (filesToSend.Any())
             {
-                isUploading = true;
                 StateHasChanged();
 
                 try
@@ -407,7 +405,6 @@
                         uploadErrorMessage = "Failed to upload files. Message not sent.";
                         newMessage = content;
                         selectedFiles.AddRange(filesToSend);
-                        isUploading = false;
                         StateHasChanged();
                         return;
                     }
@@ -424,12 +421,9 @@
                     uploadErrorMessage = ex.Message;
                     newMessage = content;
                     selectedFiles.AddRange(filesToSend);
-                    isUploading = false;
                     StateHasChanged();
                     return;
                 }
-
-                isUploading = false;
             }
 
             // Only send the message if there's either text or at least one successful attachment

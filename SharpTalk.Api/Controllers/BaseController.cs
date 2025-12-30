@@ -79,6 +79,7 @@ public abstract class BaseController : ControllerBase
     /// </summary>
     protected async Task<string> GetEffectiveStatusAsync(int userId, string preferredStatus)
     {
+        if (_redis == null) return "Offline";
         var isOnline = await _redis.SetContainsAsync("online_users", userId);
         return isOnline ? preferredStatus : "Offline";
     }
@@ -88,6 +89,7 @@ public abstract class BaseController : ControllerBase
     /// </summary>
     protected async Task<HashSet<int>> GetOnlineUserIdsAsync()
     {
+        if (_redis == null) return new HashSet<int>();
         var onlineUsers = await _redis.SetMembersAsync("online_users");
         return onlineUsers.Select(v => (int)v).ToHashSet();
     }

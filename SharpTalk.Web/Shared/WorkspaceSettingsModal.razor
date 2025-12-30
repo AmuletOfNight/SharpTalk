@@ -24,7 +24,7 @@
                                 </li>
                                 <li class="nav-item">
                                     <button class="nav-link w-100 text-start @(ActiveTab == "Members" ? "active" : "")"
-                                @onclick='() => { ActiveTab = "Members"; LoadMembers(); }'>Members</button>
+                                @onclick='async () => { ActiveTab = "Members"; await LoadMembers(); }'>Members</button>
                                 </li>
                             </ul>
                         </div>

@@ -103,7 +103,7 @@ public class ChatService : IAsyncDisposable
         }
     }
 
-    public async Task SendMessageAsync(int channelId, string content, List<int> attachmentIds = null)
+    public async Task SendMessageAsync(int channelId, string content, List<int>? attachmentIds = null)
     {
         if (_hubConnection is not null && _hubConnection.State == HubConnectionState.Connected)
         {
@@ -148,7 +148,7 @@ public class ChatService : IAsyncDisposable
         throw new HttpRequestException($"Upload failed with status {response.StatusCode}: {errorMessage}");
     }
 
-    public async Task<string> DownloadAttachmentAsync(int attachmentId)
+    public async Task<string?> DownloadAttachmentAsync(int attachmentId)
     {
         var token = await _localStorage.GetItemAsync<string>("authToken");
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
