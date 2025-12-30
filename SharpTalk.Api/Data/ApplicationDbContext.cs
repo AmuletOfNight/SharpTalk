@@ -24,7 +24,23 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
         modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
 
-        // ChannelMember Composite Key
+        // Performance indexes for frequently queried columns
+        modelBuilder.Entity<Message>()
+            .HasIndex(m => m.ChannelId);
+
+        modelBuilder.Entity<WorkspaceMember>()
+            .HasIndex(wm => wm.UserId);
+
+        modelBuilder.Entity<WorkspaceMember>()
+            .HasIndex(wm => new { wm.WorkspaceId, wm.UserId });
+
+        modelBuilder.Entity<Channel>()
+            .HasIndex(c => c.WorkspaceId);
+
+        modelBuilder.Entity<Channel>()
+            .HasIndex(c => new { c.WorkspaceId, c.Type });
+
+        // ChannelMember Composite Key (already indexed by primary key)
         modelBuilder.Entity<ChannelMember>()
             .HasKey(cm => new { cm.ChannelId, cm.UserId });
 

@@ -198,7 +198,7 @@
 
     private async Task LoadDataAsync()
     {
-        try 
+        try
         {
             Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
             var user = await UserService.GetCurrentUserAsync();
@@ -222,16 +222,18 @@
                     // Default to first if no history or history invalid
                     await HandleWorkspaceSelected(Workspaces.First().Id);
                 }
-                else 
+                else
                 {
                      // No workspaces, go home
                      await HandleWorkspaceSelected(-1);
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-             // Data loading error
+             // Log the error for debugging
+             Console.WriteLine($"Error loading data: {ex.Message}");
+             // Still set IsLoading to false so we can see something
         }
     }
 

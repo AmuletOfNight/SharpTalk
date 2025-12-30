@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Moq;
 using SharpTalk.Api.Entities;
 using SharpTalk.Api.Hubs;
@@ -19,6 +20,7 @@ public class ChatHubTests : IDisposable
     private readonly Mock<IClientProxy> _groupClientsMock;
     private readonly Mock<IGroupManager> _groupsMock;
     private readonly Mock<HubCallerContext> _contextMock;
+    private readonly Mock<ILogger<ChatHub>> _loggerMock;
     private readonly ChatHub _hub;
 
     public ChatHubTests()
@@ -36,11 +38,12 @@ public class ChatHubTests : IDisposable
         _groupClientsMock = new Mock<IClientProxy>();
         _groupsMock = new Mock<IGroupManager>();
         _contextMock = new Mock<HubCallerContext>();
+        _loggerMock = new Mock<ILogger<ChatHub>>();
 
         _clientsMock.Setup(c => c.All).Returns(_allClientsMock.Object);
         _clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(_groupClientsMock.Object);
 
-        _hub = new ChatHub(_dbHelper.Context, _redisMock.Object)
+        _hub = new ChatHub(_dbHelper.Context, _redisMock.Object, _loggerMock.Object)
         {
             Clients = _clientsMock.Object,
             Groups = _groupsMock.Object,

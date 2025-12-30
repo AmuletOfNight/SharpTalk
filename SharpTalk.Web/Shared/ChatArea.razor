@@ -19,8 +19,8 @@
             var isMine = msg.UserId == currentUserId;
             var isNew = msg.Timestamp > lastSentTimestamp;
             var animationClass = isNew ? (isMine ? "fly-in" : "slide-in-left") : "";
+            <div @key="msg.Id" class='message-item @(isMine ? "message-mine" : "message-others") @animationClass'>
             
-            <div class='message-item @(isMine ? "message-mine" : "message-others") @animationClass'>
                 <div class="message-body">
                     <div class="message-content-wrapper">
                         @if (!isMine)
@@ -352,7 +352,7 @@
 
         if (typingTimer == null)
         {
-            typingTimer = new System.Timers.Timer(3000);
+            typingTimer = new System.Timers.Timer((int)ChatConstants.TypingIndicatorTimeout.TotalMilliseconds);
             typingTimer.AutoReset = false;
             typingTimer.Elapsed += async (s, args) =>
             {
@@ -509,7 +509,7 @@
         StateHasChanged();
     }
 
-    private async void DownloadFile(AttachmentDto attachment)
+    private async Task DownloadFile(AttachmentDto attachment)
     {
         var downloadUrl = await ChatService.DownloadAttachmentAsync(attachment.Id);
         if (!string.IsNullOrEmpty(downloadUrl))

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
@@ -16,21 +17,39 @@ namespace SharpTalk.Api.Controllers;
 public class ChannelController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    private readonly IDatabase _redis;
+    private readonly IDatabase? _redis;
+    private readonly IMemoryCache _cache;
+    private static readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(5);
 
-    public ChannelController(ApplicationDbContext context, IConnectionMultiplexer redis)
+    public ChannelController(ApplicationDbContext context, IConnectionMultiplexer redis, IMemoryCache cache)
     {
         _context = context;
-        _redis = redis.GetDatabase();
+        _cache = cache;
+        try
+        {
+            _redis = redis.GetDatabase();
+        }
+        catch (RedisException)
+        {
+            _redis = null;
+        }
     }
 
     [HttpGet("{workspaceId}")]
     public async Task<ActionResult<List<ChannelDto>>> GetChannels(int workspaceId)
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+        var cacheKey = $"channels:workspace:{workspaceId}:user:{userId}";
+
+        // Try to get from cache first
+        if (_cache.TryGetValue(cacheKey, out List<ChannelDto>? cachedChannels))
+        {
+            return Ok(cachedChannels);
+        }
 
         // internal check: is user member of workspace?
         var isMember = await _context.WorkspaceMembers
+            .AsNoTracking()
             .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
 
         if (!isMember)
@@ -40,6 +59,7 @@ public class ChannelController : ControllerBase
 
         // Exclude DM channels from workspace list - DMs should only be accessible via global DMs list
         var channels = await _context.Channels
+            .AsNoTracking()
             .Where(c => c.WorkspaceId == workspaceId
                      && c.Type != ChannelType.Direct  // Exclude DM channels
                      && (!c.IsPrivate || _context.ChannelMembers.Any(cm => cm.ChannelId == c.Id && cm.UserId == userId)))
@@ -54,6 +74,9 @@ public class ChannelController : ControllerBase
             })
             .ToListAsync();
 
+        // Cache the result
+        _cache.Set(cacheKey, channels, _cacheDuration);
+
         return Ok(channels);
     }
 
@@ -64,6 +87,7 @@ public class ChannelController : ControllerBase
 
         // Verify membership and ownership
         var workspace = await _context.Workspaces
+            .AsNoTracking()
             .FirstOrDefaultAsync(w => w.Id == request.WorkspaceId);
 
         if (workspace == null)
@@ -114,9 +138,17 @@ public class ChannelController : ControllerBase
     public async Task<ActionResult<List<ChannelDto>>> GetDirectMessages()
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+        var cacheKey = $"dms:user:{userId}";
+
+        // Try to get from cache first (shorter duration for DMs as they change frequently)
+        if (_cache.TryGetValue(cacheKey, out List<ChannelDto>? cachedDms))
+        {
+            return Ok(cachedDms);
+        }
 
         // Fetch all DMs involving the user (Global + Legacy)
         var rawChannels = await _context.Channels
+            .AsNoTracking()
             .Include(c => c.Members)
             .ThenInclude(m => m.User)
             .Where(c => c.Type == ChannelType.Direct && c.Members.Any(m => m.UserId == userId))
@@ -135,6 +167,7 @@ public class ChannelController : ControllerBase
 
         // Get my workspace IDs
         var myWorkspaceIds = (await _context.WorkspaceMembers
+            .AsNoTracking()
             .Where(wm => wm.UserId == userId)
             .Select(wm => wm.WorkspaceId)
             .ToListAsync()).ToHashSet();
@@ -148,6 +181,7 @@ public class ChannelController : ControllerBase
 
         // Fetch workspace memberships for all target users
         var targetMemberships = await _context.WorkspaceMembers
+            .AsNoTracking()
             .Where(wm => targetUserIds.Contains(wm.UserId))
             .Select(wm => new { wm.UserId, wm.WorkspaceId })
             .ToListAsync();
@@ -202,6 +236,9 @@ public class ChannelController : ControllerBase
             }
         }
 
+        // Cache the result with shorter duration for DMs
+        _cache.Set(cacheKey, groupedChannels, TimeSpan.FromMinutes(2));
+
         return Ok(groupedChannels);
     }
 
@@ -219,9 +256,11 @@ public class ChannelController : ControllerBase
         if (request.WorkspaceId.HasValue)
         {
             var isMember = await _context.WorkspaceMembers
+               .AsNoTracking()
                .AnyAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == userId);
 
             var targetIsMember = await _context.WorkspaceMembers
+               .AsNoTracking()
                .AnyAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == request.TargetUserId);
 
             if (isMember && targetIsMember) canMessage = true;
@@ -229,8 +268,8 @@ public class ChannelController : ControllerBase
         else
         {
             // Check if they share ANY workspace
-            var myWorkspaces = _context.WorkspaceMembers.Where(wm => wm.UserId == userId).Select(wm => wm.WorkspaceId);
-            var targetWorkspaces = _context.WorkspaceMembers.Where(wm => wm.UserId == request.TargetUserId).Select(wm => wm.WorkspaceId);
+            var myWorkspaces = _context.WorkspaceMembers.AsNoTracking().Where(wm => wm.UserId == userId).Select(wm => wm.WorkspaceId);
+            var targetWorkspaces = _context.WorkspaceMembers.AsNoTracking().Where(wm => wm.UserId == request.TargetUserId).Select(wm => wm.WorkspaceId);
 
             if (await myWorkspaces.Intersect(targetWorkspaces).AnyAsync())
             {
@@ -243,6 +282,7 @@ public class ChannelController : ControllerBase
         // Check for ANY existing DM - STRONGLY prefer Global DMs (WorkspaceId = null)
         // to ensure users have a single unified DM conversation regardless of where they start it
         var existingChannel = await _context.Channels
+            .AsNoTracking()
             .Include(c => c.Members)
             .Where(c => c.Type == ChannelType.Direct
                      && c.Members.Any(m => m.UserId == userId)
@@ -251,8 +291,9 @@ public class ChannelController : ControllerBase
             .ThenByDescending(c => c.Id)  // Newest first
             .FirstOrDefaultAsync();
 
-        // Resolve name for existing DM (the other user)
+        // Resolve name for existing DM (the other user) - use AsNoTracking for read-only
         var targetUser = await _context.Users
+            .AsNoTracking()
             .Where(u => u.Id == request.TargetUserId)
             .Select(u => new { u.Username, u.AvatarUrl, u.Status })
             .FirstOrDefaultAsync();
@@ -262,8 +303,9 @@ public class ChannelController : ControllerBase
 
         if (existingChannel != null)
         {
-            // Get last message for description if possible, or empty
+            // Get last message for description if possible, or empty - use AsNoTracking
             var lastMsg = await _context.Messages
+                .AsNoTracking()
                 .Where(m => m.ChannelId == existingChannel.Id)
                 .OrderByDescending(m => m.Timestamp)
                 .Select(m => m.Content)
@@ -328,6 +370,7 @@ public class ChannelController : ControllerBase
 
         // Find existing global DM (WorkspaceId = null) with this user
         var existingChannel = await _context.Channels
+            .AsNoTracking()
             .Include(c => c.Members)
             .ThenInclude(m => m.User)
             .Where(c => c.Type == ChannelType.Direct
@@ -351,7 +394,7 @@ public class ChannelController : ControllerBase
         var channel = existingChannel.Channel;
         var lastMsg = existingChannel.LastMessage;
 
-        return Ok(new ChannelDto
+        var result = new ChannelDto
         {
             Id = channel.Id,
             WorkspaceId = null,
@@ -363,7 +406,13 @@ public class ChannelController : ControllerBase
             CanMessage = true,
             UserStatus = await GetEffectiveStatus(targetUserId, targetUser.Status),
             TargetUserId = targetUserId
-        });
+        };
+
+        // Cache the DM check result
+        var cacheKey = $"dm:check:{userId}:{targetUserId}";
+        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+
+        return Ok(result);
     }
 
     /// <summary>
@@ -372,16 +421,30 @@ public class ChannelController : ControllerBase
     /// </summary>
     private async Task<string> GetEffectiveStatus(int userId, string preferredStatus)
     {
-        // Check if user is in the online_users Redis set
-        var isOnline = await _redis.SetContainsAsync("online_users", userId);
-
-        // If they're not connected, they're offline regardless of their preference
-        if (!isOnline)
+        if (_redis == null)
         {
-            return "Offline";
+            // Redis unavailable, return preferred status
+            return preferredStatus;
         }
 
-        // If they are connected, return their preferred status
-        return preferredStatus;
+        try
+        {
+            // Check if user is in the online_users Redis set
+            var isOnline = await _redis.SetContainsAsync("online_users", userId);
+
+            // If they're not connected, they're offline regardless of their preference
+            if (!isOnline)
+            {
+                return "Offline";
+            }
+
+            // If they are connected, return their preferred status
+            return preferredStatus;
+        }
+        catch (RedisException)
+        {
+            // Redis unavailable, return preferred status
+            return preferredStatus;
+        }
     }
 }

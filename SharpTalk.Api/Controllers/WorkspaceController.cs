@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
@@ -16,11 +17,13 @@ public class WorkspaceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IConnectionMultiplexer _redis;
+    private readonly IMemoryCache _cache;
 
-    public WorkspaceController(ApplicationDbContext context, IConnectionMultiplexer redis)
+    public WorkspaceController(ApplicationDbContext context, IConnectionMultiplexer redis, IMemoryCache cache)
     {
         _context = context;
         _redis = redis;
+        _cache = cache;
     }
 
     [HttpPost("reorder")]
@@ -75,11 +78,14 @@ public class WorkspaceController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
         var isMember = await _context.WorkspaceMembers
+            .AsNoTracking()
             .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
 
         if (!isMember) return Forbid();
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         return Ok(new WorkspaceDto
@@ -142,7 +148,9 @@ public class WorkspaceController : ControllerBase
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(request.WorkspaceId);
+        var workspace = await _context.Workspaces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == request.WorkspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != userId)
@@ -150,10 +158,13 @@ public class WorkspaceController : ControllerBase
             return Forbid();
         }
 
-        var userToInvite = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+        var userToInvite = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Username == request.Username);
         if (userToInvite == null) return NotFound("User not found");
 
         var exists = await _context.WorkspaceMembers
+            .AsNoTracking()
             .AnyAsync(wm => wm.WorkspaceId == request.WorkspaceId && wm.UserId == userToInvite.Id);
 
         if (exists) return BadRequest("User is already a member");
@@ -177,11 +188,37 @@ public class WorkspaceController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
         var isMember = await _context.WorkspaceMembers
+            .AsNoTracking()
             .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
 
         if (!isMember) return Forbid();
 
+        var cacheKey = $"workspace_members_{workspaceId}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<UserStatusDto>? cachedMembers))
+        {
+            // Update online status from Redis (gracefully handle Redis failures)
+            try
+            {
+                var db = _redis.GetDatabase();
+                var onlineUsers = await db.SetMembersAsync("online_users");
+                var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
+
+                foreach (var member in cachedMembers)
+                {
+                    member.Status = onlineUserIds.Contains(member.UserId) ? "Online" : "Offline";
+                }
+            }
+            catch (RedisException)
+            {
+                // Redis unavailable, keep default status
+            }
+
+            return Ok(cachedMembers);
+        }
+
         var members = await _context.WorkspaceMembers
+            .AsNoTracking()
             .Where(wm => wm.WorkspaceId == workspaceId)
             .Include(wm => wm.User)
             .Select(wm => new UserStatusDto
@@ -193,17 +230,27 @@ public class WorkspaceController : ControllerBase
             })
             .ToListAsync();
 
-        var db = _redis.GetDatabase();
-        var onlineUsers = await db.SetMembersAsync("online_users");
-        var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
-
-        foreach (var member in members)
+        // Get online status from Redis (gracefully handle Redis failures)
+        try
         {
-            if (!onlineUserIds.Contains(member.UserId))
+            var db2 = _redis.GetDatabase();
+            var onlineUsers2 = await db2.SetMembersAsync("online_users");
+            var onlineUserIds2 = onlineUsers2.Select(v => (int)v).ToHashSet();
+
+            foreach (var member in members)
             {
-                member.Status = "Offline";
+                if (!onlineUserIds2.Contains(member.UserId))
+                {
+                    member.Status = "Offline";
+                }
             }
         }
+        catch (RedisException)
+        {
+            // Redis unavailable, keep default status from database
+        }
+
+        _cache.Set(cacheKey, members, TimeSpan.FromMinutes(5));
 
         return Ok(members);
     }
@@ -214,11 +261,42 @@ public class WorkspaceController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
         var isMember = await _context.WorkspaceMembers
+            .AsNoTracking()
             .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
 
         if (!isMember) return Forbid();
 
+        var cacheKey = $"workspace_members_detailed_{workspaceId}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<WorkspaceMemberDto>? cachedMembers))
+        {
+            // Update online status from Redis (gracefully handle Redis failures)
+            try
+            {
+                var db = _redis.GetDatabase();
+                var onlineUsers = await db.SetMembersAsync("online_users");
+                var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
+
+                foreach (var member in cachedMembers)
+                {
+                    member.IsOnline = onlineUserIds.Contains(member.UserId);
+                    member.IsCurrentUser = member.UserId == userId;
+                }
+            }
+            catch (RedisException)
+            {
+                // Redis unavailable, keep default status
+                foreach (var member in cachedMembers)
+                {
+                    member.IsCurrentUser = member.UserId == userId;
+                }
+            }
+
+            return Ok(cachedMembers);
+        }
+
         var members = await _context.WorkspaceMembers
+            .AsNoTracking()
             .Where(wm => wm.WorkspaceId == workspaceId)
             .Include(wm => wm.User)
             .Select(wm => new WorkspaceMemberDto
@@ -232,15 +310,29 @@ public class WorkspaceController : ControllerBase
             })
             .ToListAsync();
 
-        var db = _redis.GetDatabase();
-        var onlineUsers = await db.SetMembersAsync("online_users");
-        var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
-
-        foreach (var member in members)
+        // Get online status from Redis (gracefully handle Redis failures)
+        try
         {
-            member.IsOnline = onlineUserIds.Contains(member.UserId);
-            member.IsCurrentUser = member.UserId == userId;
+            var db2 = _redis.GetDatabase();
+            var onlineUsers2 = await db2.SetMembersAsync("online_users");
+            var onlineUserIds2 = onlineUsers2.Select(v => (int)v).ToHashSet();
+
+            foreach (var member in members)
+            {
+                member.IsOnline = onlineUserIds2.Contains(member.UserId);
+                member.IsCurrentUser = member.UserId == userId;
+            }
         }
+        catch (RedisException)
+        {
+            // Redis unavailable, keep default status
+            foreach (var member in members)
+            {
+                member.IsCurrentUser = member.UserId == userId;
+            }
+        }
+
+        _cache.Set(cacheKey, members, TimeSpan.FromMinutes(5));
 
         return Ok(members);
     }
@@ -250,7 +342,8 @@ public class WorkspaceController : ControllerBase
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != userId)
@@ -266,6 +359,10 @@ public class WorkspaceController : ControllerBase
         workspace.Name = request.NewName;
         await _context.SaveChangesAsync();
 
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{workspaceId}");
+        _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
         return Ok();
     }
 
@@ -274,7 +371,8 @@ public class WorkspaceController : ControllerBase
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != userId)
@@ -285,6 +383,10 @@ public class WorkspaceController : ControllerBase
         workspace.Description = request.Description;
         await _context.SaveChangesAsync();
 
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{workspaceId}");
+        _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
         return Ok();
     }
 
@@ -293,7 +395,9 @@ public class WorkspaceController : ControllerBase
     {
         var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != currentUserId)
@@ -314,6 +418,10 @@ public class WorkspaceController : ControllerBase
         _context.WorkspaceMembers.Remove(member);
         await _context.SaveChangesAsync();
 
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{workspaceId}");
+        _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
         return Ok();
     }
 
@@ -322,7 +430,9 @@ public class WorkspaceController : ControllerBase
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId == userId)
@@ -338,6 +448,10 @@ public class WorkspaceController : ControllerBase
         _context.WorkspaceMembers.Remove(member);
         await _context.SaveChangesAsync();
 
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{workspaceId}");
+        _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
         return Ok();
     }
 
@@ -346,7 +460,8 @@ public class WorkspaceController : ControllerBase
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != userId)
@@ -365,7 +480,8 @@ public class WorkspaceController : ControllerBase
     {
         var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != currentUserId)
@@ -397,6 +513,10 @@ public class WorkspaceController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{workspaceId}");
+        _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
         return Ok();
     }
 
@@ -405,7 +525,9 @@ public class WorkspaceController : ControllerBase
     {
         var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+        var workspace = await _context.Workspaces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
         if (workspace == null) return NotFound("Workspace not found");
 
         if (workspace.OwnerId != currentUserId)
@@ -430,6 +552,10 @@ public class WorkspaceController : ControllerBase
 
         member.Role = request.NewRole;
         await _context.SaveChangesAsync();
+
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{workspaceId}");
+        _cache.Remove($"workspace_members_detailed_{workspaceId}");
 
         return Ok();
     }

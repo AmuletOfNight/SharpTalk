@@ -19,7 +19,7 @@ public class UserController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly FileUploadService _fileUploadService;
     private readonly IHubContext<ChatHub> _hubContext;
-    private readonly IDatabase _redis;
+    private readonly IDatabase? _redis;
 
     public UserController(ApplicationDbContext context, IWebHostEnvironment environment, IConfiguration configuration, FileUploadService fileUploadService, IHubContext<ChatHub> hubContext, IConnectionMultiplexer redis)
     {
@@ -28,7 +28,14 @@ public class UserController : ControllerBase
         _configuration = configuration;
         _fileUploadService = fileUploadService;
         _hubContext = hubContext;
-        _redis = redis.GetDatabase();
+        try
+        {
+            _redis = redis.GetDatabase();
+        }
+        catch (RedisException)
+        {
+            _redis = null;
+        }
     }
 
     [HttpGet("profile")]
@@ -234,28 +241,40 @@ public class UserController : ControllerBase
 
     private async Task BroadcastStatusChange(int userId, string status)
     {
-        if (await _redis.SetContainsAsync("online_users", userId))
+        if (_redis == null)
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) return;
+            return;
+        }
 
-            var statusDto = new UserStatusDto
+        try
+        {
+            if (await _redis.SetContainsAsync("online_users", userId))
             {
-                UserId = userId,
-                Username = user.Username,
-                AvatarUrl = user.AvatarUrl,
-                Status = status
-            };
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null) return;
 
-            var workspaceIds = await _context.WorkspaceMembers
-                .Where(wm => wm.UserId == userId)
-                .Select(wm => wm.WorkspaceId)
-                .ToListAsync();
+                var statusDto = new UserStatusDto
+                {
+                    UserId = userId,
+                    Username = user.Username,
+                    AvatarUrl = user.AvatarUrl,
+                    Status = status
+                };
 
-            foreach (var workspaceId in workspaceIds)
-            {
-                await _hubContext.Clients.Group($"workspace_{workspaceId}").SendAsync("UserStatusChanged", statusDto);
+                var workspaceIds = await _context.WorkspaceMembers
+                    .Where(wm => wm.UserId == userId)
+                    .Select(wm => wm.WorkspaceId)
+                    .ToListAsync();
+
+                foreach (var workspaceId in workspaceIds)
+                {
+                    await _hubContext.Clients.Group($"workspace_{workspaceId}").SendAsync("UserStatusChanged", statusDto);
+                }
             }
+        }
+        catch (RedisException)
+        {
+            // Redis unavailable, skip broadcasting
         }
     }
 }

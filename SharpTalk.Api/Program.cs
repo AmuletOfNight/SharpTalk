@@ -1,13 +1,29 @@
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
+using SharpTalk.Api.Configuration;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Services;
 using StackExchange.Redis;
+using System.IO.Compression;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddMemoryCache();
+
+// Add response compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Optimal;
+});
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -77,6 +93,7 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection();
 
+app.UseResponseCompression();
 app.UseCors("AllowAll");
 
 // Configure secure static file serving
@@ -107,22 +124,33 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<SharpTalk.Api.Hubs.ChatHub>("/chatHub");
 
-// Cleanup Redis on startup (clear stale presence data)
+// Cleanup Redis on startup (clear stale presence data) - gracefully handle Redis unavailability
 using (var scope = app.Services.CreateScope())
 {
-    var redis = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-    var db = redis.GetDatabase();
-    var server = redis.GetServer(redis.GetEndPoints().First());
-
-    // Clear the online_users set
-    await db.KeyDeleteAsync("online_users");
-
-    // Clear all user_connections sets
-    var keys = server.Keys(pattern: "user_connections:*").ToArray();
-    foreach (var key in keys)
+    try
     {
-        await db.KeyDeleteAsync(key);
+        var redis = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+        var db = redis.GetDatabase();
+        var server = redis.GetServer(redis.GetEndPoints().First());
+
+        // Clear the online_users set
+        await db.KeyDeleteAsync("online_users");
+
+        // Clear all user_connections sets
+        var keys = server.Keys(pattern: "user_connections:*").ToArray();
+        foreach (var key in keys)
+        {
+            await db.KeyDeleteAsync(key);
+        }
+    }
+    catch (RedisException)
+    {
+        // Redis not available, skipping cleanup
+    }
+    catch (InvalidOperationException)
+    {
+        // No endpoints available from Redis connection
     }
 }
 
-app.Run();
+await app.RunAsync();

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Api.Services;
+using SharpTalk.Shared;
 using SharpTalk.Shared.DTOs;
 using StackExchange.Redis;
 using System.Security.Claims;
@@ -21,7 +22,7 @@ public class MessageController : ControllerBase
     private readonly FileUploadService _fileUploadService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MessageController> _logger;
-    private readonly IDatabase _redis;
+    private readonly IDatabase? _redis;
 
     public MessageController(ApplicationDbContext context, FileUploadService fileUploadService, IConfiguration configuration, ILogger<MessageController> logger, IConnectionMultiplexer redis)
     {
@@ -29,7 +30,14 @@ public class MessageController : ControllerBase
         _fileUploadService = fileUploadService;
         _configuration = configuration;
         _logger = logger;
-        _redis = redis.GetDatabase();
+        try
+        {
+            _redis = redis.GetDatabase();
+        }
+        catch (RedisException)
+        {
+            _redis = null;
+        }
     }
 
     [HttpGet("{channelId}")]
@@ -38,7 +46,7 @@ public class MessageController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
         // [SECURITY] Verify user is member of the workspace for this channel
-        var channel = await _context.Channels.FindAsync(channelId);
+        var channel = await _context.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.Id == channelId);
         if (channel == null)
         {
             return NotFound("Channel not found.");
@@ -47,12 +55,14 @@ public class MessageController : ControllerBase
         if (channel.IsPrivate)
         {
             var isChannelMember = await _context.ChannelMembers
+                .AsNoTracking()
                 .AnyAsync(cm => cm.ChannelId == channelId && cm.UserId == userId);
             if (!isChannelMember) return Forbid();
         }
         else
         {
             var isMember = await _context.WorkspaceMembers
+                .AsNoTracking()
                 .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
 
             if (!isMember)
@@ -61,9 +71,10 @@ public class MessageController : ControllerBase
             }
         }
 
-        var maxMessagesToRetrieve = int.Parse(_configuration["MessageSettings:MaxMessagesToRetrieve"] ?? "50");
+        var maxMessagesToRetrieve = int.Parse(_configuration["MessageSettings:MaxMessagesToRetrieve"] ?? ChatConstants.DefaultMessageLimit.ToString());
 
         var messages = await _context.Messages
+            .AsNoTracking()
             .Where(m => m.ChannelId == channelId)
             .Include(m => m.User) // Include user to get username
             .Include(m => m.Attachments) // Include attachments
@@ -92,14 +103,25 @@ public class MessageController : ControllerBase
             })
             .ToListAsync();
 
-        var onlineUsers = await _redis.SetMembersAsync("online_users");
-        var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
-
-        foreach (var msg in messages)
+        // Get online users from Redis (gracefully handle Redis unavailability)
+        if (_redis != null)
         {
-            if (!onlineUserIds.Contains(msg.UserId))
+            try
             {
-                msg.UserStatus = "Offline";
+                var onlineUsers = await _redis.SetMembersAsync("online_users");
+                var onlineUserIds = onlineUsers.Select(v => (int)v).ToHashSet();
+
+                foreach (var msg in messages)
+                {
+                    if (!onlineUserIds.Contains(msg.UserId))
+                    {
+                        msg.UserStatus = "Offline";
+                    }
+                }
+            }
+            catch (RedisException)
+            {
+                // Redis unavailable, keep default status from database
             }
         }
 
@@ -112,18 +134,20 @@ public class MessageController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
         // Verify user is in channel
-        var channel = await _context.Channels.FindAsync(channelId);
+        var channel = await _context.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.Id == channelId);
         if (channel == null) return NotFound("Channel not found");
 
         if (channel.IsPrivate)
         {
             var isChannelMember = await _context.ChannelMembers
+                .AsNoTracking()
                 .AnyAsync(cm => cm.ChannelId == channelId && cm.UserId == userId);
             if (!isChannelMember) return Forbid();
         }
         else
         {
             var isMember = await _context.WorkspaceMembers
+                .AsNoTracking()
                 .AnyAsync(wm => wm.WorkspaceId == channel.WorkspaceId && wm.UserId == userId);
             if (!isMember) return Forbid();
         }

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using SharpTalk.Api.Controllers;
 using SharpTalk.Api.Entities;
@@ -18,16 +19,18 @@ public class ChannelControllerTests : IDisposable
     private readonly ChannelController _controller;
     private readonly Mock<IConnectionMultiplexer> _redisMock;
     private readonly Mock<IDatabase> _redisDatabaseMock;
+    private readonly Mock<IMemoryCache> _cacheMock;
 
     public ChannelControllerTests()
     {
         _dbHelper = TestDbContextHelper.Create();
         _redisMock = new Mock<IConnectionMultiplexer>();
         _redisDatabaseMock = new Mock<IDatabase>();
+        _cacheMock = new Mock<IMemoryCache>();
         
         _redisMock.Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(_redisDatabaseMock.Object);
         
-        _controller = new ChannelController(_dbHelper.Context, _redisMock.Object);
+        _controller = new ChannelController(_dbHelper.Context, _redisMock.Object, _cacheMock.Object);
     }
 
     private void SetupUser(int userId, string username = "testuser")
