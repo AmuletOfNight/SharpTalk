@@ -46,75 +46,52 @@ SharpTalk is a multi-tenant collaboration tool organized around **Workspaces**, 
 - ✅ User login with JWT token generation
 - ✅ Secure API endpoints with JWT authentication
 - ✅ Custom authentication state provider for Blazor
+- ✅ Case-insensitive email handling
+- ✅ Automatic redirection for invalid sessions
 
 **Workspace Management**
-- ✅ Create new workspaces
-- ✅ List user's workspaces
-- ✅ Invite users to workspaces by username
-- ✅ Workspace member management
-- ✅ Workspace settings modal (basic)
+- ✅ Create and delete workspaces
+- ✅ Rename workspaces and update descriptions
+- ✅ Invite users and manage members
+- ✅ Leave workspace functionality
+- ✅ Workspace settings modal
 
 **Channel Management**
-- ✅ Create channels within workspaces
-- ✅ List channels (public and private)
+- ✅ Create, list, and manage channels
+- ✅ Public and private channel support
 - ✅ Channel member tracking
-- ✅ Private channel support (invite-only)
 
-**Data Layer**
-- ✅ Complete EF Core entity model:
-  - User (with avatar URL and status)
-  - Workspace (with description and creation date)
-  - WorkspaceMember (role-based membership)
-  - Channel (public/private visibility)
-  - ChannelMember (channel membership tracking)
-  - Message (with threading support)
-  - Attachment (file sharing)
-  - Reaction (emoji reactions)
-- ✅ PostgreSQL database migrations
-- ✅ Database context configuration
+**Real-Time Messaging**
+- ✅ SignalR hub configuration with Redis backplane
+- ✅ Instant message delivery and broadcasting
+- ✅ Connection management and auto-reconnect
 
-**Frontend Foundation**
-- ✅ Main layout with sidebar navigation
-- ✅ Workspace switcher
-- ✅ Channel list component
-- ✅ Chat area component
-- ✅ Authentication state management
-- ✅ Login and registration pages
-- ✅ Responsive design with dark mode
+#### Phase 2: Enhanced UX (Partial)
 
-**Infrastructure**
-- ✅ Docker Compose setup (PostgreSQL + Redis)
-- ✅ CORS configuration
-- ✅ Static file serving with security headers
-- ✅ SignalR hub configuration
-- ✅ Redis connection multiplexer setup
+**Direct Messaging**
+- ✅ 1:1 private conversations (Global DMs)
+- ✅ Group Direct Messages (Support for multiple members)
+- ✅ Unified DM list across workspaces
+
+**Presence & Activity**
+- ✅ Real-time Online/Offline status tracking
+- ✅ Integration with Redis for scalable presence
+- ✅ Visual status indicators in UI
+
+**User Experience**
+- ✅ Modern "Slack-like" UI with Dark Mode
+- ✅ User Settings and Profile Management
+- ✅ Avatar uploading and cropping
+- ✅ Responsive design for mobile/desktop
 
 ### 🚧 In Progress
 
-**Real-Time Messaging**
-- ⏳ SignalR hub configuration
-- ⏳ Message persistence and broadcasting
-- ⏳ WebSocket connection management
+**Notifications & Unread**
+- ⏳ Unread message counters
+- ⏳ Typing indicators
+- ⏳ "Edited" message status
 
 ### 📅 Planned Features
-
-#### Phase 2: Enhanced UX ("The Slack Feel")
-
-**Direct Messaging**
-- 1:1 private conversations
-- Group DMs (3-9 users)
-- Self DM (personal notes space)
-
-**Presence & Activity**
-- Online/offline status indicators (green dot)
-- Typing indicators ("User is typing...")
-- Last seen timestamps
-- Redis-based presence tracking
-
-**Notifications & Unread**
-- Unread message counters per channel
-- "Edited" status for modified messages
-- Real-time notification system
 
 #### Phase 3: Advanced Features
 
@@ -134,22 +111,10 @@ SharpTalk is a multi-tenant collaboration tool organized around **Workspaces**, 
 - User search
 - Quick Switcher (Ctrl+K) for navigation
 
-**Workspace Management Enhancements**
-- Rename workspaces
-- Update workspace descriptions
-- Delete workspaces (owner only)
-- Transfer ownership
-- Remove members from workspace
-- Leave workspace (non-owners)
-- Member role management
-- Workspace statistics display
-
-**User Profile Features**
-- User avatar upload
-- User settings modal
-- Profile management
-- Status updates (Online, Away, Offline)
-- Avatar display in messages
+**Future Enhancements**
+- Workspace analytics
+- Voice/video integration
+- Third-party integrations
 
 ## 🏗 Architecture
 

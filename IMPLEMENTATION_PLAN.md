@@ -46,12 +46,12 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [x] Migrate to Blazor.LocalStorage (v9)
 
 ## Phase 2: The "Slack" Feel (Enhanced UX)
-- [x] **Direct Messages**
+- [/] **Direct Messages**
     - [x] 1:1 DM support (Global DMs across workspaces)
-    - [ ] Group DM support
+    - [x] Group DM support (Feature Complete, Pending Tests)
 - [x] **Presence & Indicators**
     - [x] Online/Offline Status (Connection tracking with Redis)
-    - [ ] Calling/Typing Indicators ("User is typing...")
+    - [x] Calling/Typing Indicators ("User is typing...")
 - [ ] **Notifications & Unread**
     - [ ] Unread message counters per channel
     - [ ] "Edited" status for messages
@@ -69,44 +69,44 @@ SharpTalk is a real-time team collaboration tool designed to facilitate communic
     - [ ] Move hardcoded values to appsettings.json
 
 ## Current Task
-- [ ] **Group Direct Messages**
-    - [ ] **Data Layer**
-        - [ ] Add `Group` value to ChannelType enum
-        - [ ] Create CreateGroupDMRequest DTO
-        - [ ] Create GroupMemberDto DTO
-        - [ ] Create AddGroupMemberRequest DTO
-        - [ ] Create RemoveGroupMemberRequest DTO
-        - [ ] Create UpdateGroupNameRequest DTO
-        - [ ] Update ChannelDto with group properties (Members, MemberCount, IsGroup)
-        - [ ] Add GroupDM constants to ChatConstants.cs
-    - [ ] **Backend - API**
-        - [ ] Add CreateGroupDM POST endpoint
-        - [ ] Add AddGroupMember POST endpoint
-        - [ ] Add RemoveGroupMember DELETE endpoint
-        - [ ] Add UpdateGroupName PUT endpoint
-        - [ ] Add GetGroupMembers GET endpoint
-        - [ ] Update GetDirectMessages to include group DMs
-        - [ ] Update SendMessage validation for group DMs
-    - [ ] **Backend - SignalR Hub**
-        - [ ] Add AddGroupMember method with notifications
-        - [ ] Add RemoveGroupMember method with notifications
-        - [ ] Add UpdateGroupName method with notifications
-    - [ ] **Frontend - Services**
-        - [ ] Add CreateGroupDMAsync method
-        - [ ] Add AddGroupMemberAsync method
-        - [ ] Add RemoveGroupMemberAsync method
-        - [ ] Add UpdateGroupNameAsync method
-        - [ ] Add GetGroupMembersAsync method
-    - [ ] **Frontend - Components**
-        - [ ] Create StartGroupDMModal with multi-select UI
-        - [ ] Create GroupDMSettingsModal for member management
-        - [ ] Create GroupAvatarStack component for stacked avatars
-        - [ ] Update DirectMessagesList to display group DMs
-        - [ ] Update ChatArea with group DM header and settings
-    - [ ] **Styling**
-        - [ ] Add CSS for stacked avatar display
-        - [ ] Add CSS for group DM list items
-        - [ ] Add CSS for multi-select user interface
+- [ ] **Group Direct Messages (Testing & Polish)**
+    - [x] **Data Layer**
+        - [x] Add `Group` value to ChannelType enum
+        - [x] Create CreateGroupDMRequest DTO
+        - [x] Create GroupMemberDto DTO
+        - [x] Create AddGroupMemberRequest DTO
+        - [x] Create RemoveGroupMemberRequest DTO
+        - [x] Create UpdateGroupNameRequest DTO
+        - [x] Update ChannelDto with group properties (Members, MemberCount, IsGroup)
+        - [x] Add GroupDM constants to ChatConstants.cs
+    - [x] **Backend - API**
+        - [x] Add CreateGroupDM POST endpoint
+        - [x] Add AddGroupMember POST endpoint
+        - [x] Add RemoveGroupMember DELETE endpoint
+        - [x] Add UpdateGroupName PUT endpoint
+        - [x] Add GetGroupMembers GET endpoint
+        - [x] Update GetDirectMessages to include group DMs
+        - [x] Update SendMessage validation for group DMs
+    - [x] **Backend - SignalR Hub**
+        - [x] Add AddGroupMember method with notifications
+        - [x] Add RemoveGroupMember method with notifications
+        - [x] Add UpdateGroupName method with notifications
+    - [x] **Frontend - Services**
+        - [x] Add CreateGroupDMAsync method
+        - [x] Add AddGroupMemberAsync method
+        - [x] Add RemoveGroupMemberAsync method
+        - [x] Add UpdateGroupNameAsync method
+        - [x] Add GetGroupMembersAsync method
+    - [x] **Frontend - Components**
+        - [x] Create StartGroupDMModal with multi-select UI
+        - [x] Create GroupDMSettingsModal for member management
+        - [x] Create GroupAvatarStack component for stacked avatars
+        - [x] Update DirectMessagesList to display group DMs
+        - [x] Update ChatArea with group DM header and settings
+    - [x] **Styling**
+        - [x] Add CSS for stacked avatar display
+        - [x] Add CSS for group DM list items
+        - [x] Add CSS for multi-select user interface
     - [ ] **Testing**
         - [ ] Write unit tests for Group DM controller endpoints
         - [ ] Write unit tests for ChannelService methods
