@@ -591,10 +591,13 @@ public class WorkspaceController : ControllerBase
             {
                 await ChatHub.InvalidateChannelAccessCache(db, userId, channelId);
             }
+
+            // Notify the user via SignalR to force UI update/redirect in other tabs
+            await _hubContext.Clients.User(userId.ToString()).SendAsync("UserRemovedFromWorkspace", workspaceId);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error invalidating cache: {ex.Message}");
+            Console.WriteLine($"Error invalidating cache or notifying user: {ex.Message}");
         }
 
         return Ok();
@@ -614,8 +617,59 @@ public class WorkspaceController : ControllerBase
             return Forbid();
         }
 
+        // 1. Delete Workspace Invitations
+        var invitations = await _context.WorkspaceInvitations
+            .Where(wi => wi.WorkspaceId == workspaceId)
+            .ToListAsync();
+        _context.WorkspaceInvitations.RemoveRange(invitations);
+
+        // 2. Delete Workspace Members
+        var workspaceMembers = await _context.WorkspaceMembers
+            .Where(wm => wm.WorkspaceId == workspaceId)
+            .ToListAsync();
+        _context.WorkspaceMembers.RemoveRange(workspaceMembers);
+
+        // 3. Get Channels to delete related data
+        var channels = await _context.Channels
+            .Where(c => c.WorkspaceId == workspaceId)
+            .ToListAsync();
+
+        var channelIds = channels.Select(c => c.Id).ToList();
+
+        // 4. Delete Messages (Attachments and Reactions should cascade via EF Core or DB config, but loading messages ensures EF Core tracks delete)
+        // Optimizing by fetching IDs only if we were using ExecuteDelete, but for RemoveRange we need entities or stubs.
+        var messages = await _context.Messages
+            .Where(m => channelIds.Contains(m.ChannelId))
+            .ToListAsync();
+        _context.Messages.RemoveRange(messages);
+
+        // 5. Delete Channel Members
+        var channelMembers = await _context.ChannelMembers
+            .Where(cm => channelIds.Contains(cm.ChannelId))
+            .ToListAsync();
+        _context.ChannelMembers.RemoveRange(channelMembers);
+
+        // 6. Delete Channels
+        _context.Channels.RemoveRange(channels);
+
+        // 7. Delete Workspace
         _context.Workspaces.Remove(workspace);
+
         await _context.SaveChangesAsync();
+
+        // Invalidate caches
+        try
+        {
+            var db = _redis.GetDatabase();
+            foreach (var member in workspaceMembers)
+            {
+                await ChatHub.InvalidateUserWorkspaceCache(db, member.UserId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error invalidating cache: {ex.Message}");
+        }
 
         return Ok();
     }

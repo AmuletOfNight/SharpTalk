@@ -2538,3 +2538,104 @@ cropper-selection {
     background-color: #2f3136;
     margin: 4px 0;
 }
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    z-index: 10000;
+    background-color: #18191c;
+    border-radius: 4px;
+    padding: 6px 0;
+    min-width: 180px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    animation: contextFadeIn 0.1s ease-out;
+}
+
+@keyframes contextFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    color: #b9bbbe;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.1s, color 0.1s;
+}
+
+.context-menu-item:hover {
+    background-color: #4752c4;
+    color: white;
+}
+
+.context-menu-item.danger:hover {
+    background-color: #ed4245;
+}
+
+.context-menu-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.context-menu-item .icon {
+    font-size: 16px;
+}
+
+/* Modern Glass Modal */
+.glass-effect {
+    background: rgba(54, 57, 63, 0.8) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+.modern-modal .modal-title {
+    color: #ffffff;
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
+}
+
+.text-muted-light {
+    color: #b9bbbe;
+    line-height: 1.5;
+}
+
+.modern-modal .btn-link {
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.modern-modal .btn-link:hover {
+    opacity: 0.8;
+}
+
+.modern-modal .btn-primary {
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.modern-modal .btn-danger {
+    border-radius: 8px;
+    font-weight: 600;
+    background-color: #ed4245;
+    border-color: #ed4245;
+}
+
+.modern-modal .btn-danger:hover {
+    background-color: #c03537;
+    border-color: #c03537;
+}

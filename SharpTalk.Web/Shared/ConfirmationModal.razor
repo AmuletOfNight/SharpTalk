@@ -1,0 +1,52 @@
+@if (Show)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal modern-modal fade show" style="display: block;" tabindex="-1" role="dialog" @onclick="Close">
+        <div class="modal-dialog modal-dialog-centered" role="document" @onclick:stopPropagation>
+            <div class="modal-content glass-effect">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-weight-bold">@Title</h5>
+                    <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="mb-0 text-muted-light">@Message</p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-link text-decoration-none text-muted"
+                    @onclick="Close">@CancelButtonText</button>
+                    <button type="button" class="btn @ConfirmButtonClass px-4 py-2"
+                    @onclick="HandleConfirm">@ConfirmButtonText</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "Confirm Action";
+    [Parameter] public string Message { get; set; } = "Are you sure you want to proceed?";
+    [Parameter] public string ConfirmButtonText { get; set; } = "Confirm";
+    [Parameter] public string CancelButtonText { get; set; } = "Cancel";
+    [Parameter] public string ConfirmButtonClass { get; set; } = "btn-primary";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+
+    private bool Show { get; set; }
+
+    public void Open()
+    {
+        Show = true;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        Show = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleConfirm()
+    {
+        await OnConfirm.InvokeAsync();
+        Close();
+    }
+}

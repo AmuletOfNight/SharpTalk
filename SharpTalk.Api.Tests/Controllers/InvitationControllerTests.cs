@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using SharpTalk.Api.Controllers;
 using SharpTalk.Api.Entities;
@@ -15,11 +16,13 @@ public class InvitationControllerTests : IDisposable
 {
     private readonly TestDbContextHelper _dbHelper;
     private readonly InvitationController _controller;
+    private readonly Mock<IMemoryCache> _cacheMock;
 
     public InvitationControllerTests()
     {
         _dbHelper = TestDbContextHelper.Create();
-        _controller = new InvitationController(_dbHelper.Context);
+        _cacheMock = new Mock<IMemoryCache>();
+        _controller = new InvitationController(_dbHelper.Context, _cacheMock.Object);
     }
 
     private void SetupUser(int userId, string username = "testuser")

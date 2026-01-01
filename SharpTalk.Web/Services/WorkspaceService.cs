@@ -110,7 +110,17 @@ public class WorkspaceService
     {
         await SetAuthHeader();
         var response = await _httpClient.DeleteAsync($"api/workspace/{workspaceId}/leave");
-        return response.IsSuccessStatusCode;
+        if (response.IsSuccessStatusCode)
+        {
+            NotifyWorkspacesChanged();
+            return true;
+        }
+        return false;
+    }
+
+    public void NotifyWorkspacesChanged()
+    {
+        OnWorkspacesChanged?.Invoke();
     }
 
     public async Task<bool> DeleteWorkspaceAsync(int workspaceId)

@@ -8,6 +8,9 @@ using SharpTalk.Api.Controllers;
 using SharpTalk.Api.Entities;
 using SharpTalk.Api.Tests.Helpers;
 using SharpTalk.Shared.DTOs;
+using SharpTalk.Shared.Enums;
+using SharpTalk.Api.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 
 namespace SharpTalk.Api.Tests.Controllers;
@@ -18,18 +21,26 @@ public class WorkspaceControllerTests : IDisposable
     private readonly WorkspaceController _controller;
     private readonly Mock<IConnectionMultiplexer> _redisMock;
     private readonly Mock<IMemoryCache> _cacheMock;
+    private readonly Mock<IHubContext<SharpTalk.Api.Hubs.ChatHub>> _hubContextMock;
 
     public WorkspaceControllerTests()
     {
         _dbHelper = TestDbContextHelper.Create();
         _redisMock = new Mock<IConnectionMultiplexer>();
         _cacheMock = new Mock<IMemoryCache>();
+        _hubContextMock = new Mock<IHubContext<SharpTalk.Api.Hubs.ChatHub>>();
 
         // Setup Redis mock
         var redisDatabaseMock = new Mock<IDatabase>();
         _redisMock.Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(redisDatabaseMock.Object);
 
-        _controller = new WorkspaceController(_dbHelper.Context, _redisMock.Object, _cacheMock.Object);
+        // Setup HubContext mocks
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        _hubContextMock.Setup(x => x.Clients).Returns(clientsMock.Object);
+        clientsMock.Setup(x => x.User(It.IsAny<string>())).Returns(clientProxyMock.Object);
+
+        _controller = new WorkspaceController(_dbHelper.Context, _redisMock.Object, _cacheMock.Object, _hubContextMock.Object);
     }
 
     private void SetupUser(int userId, string username = "testuser")
@@ -71,8 +82,9 @@ public class WorkspaceControllerTests : IDisposable
         var result = await _controller.CreateWorkspace(request);
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var workspace = okResult.Value.Should().BeOfType<WorkspaceDto>().Subject;
+        var createdResult = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
+        var workspace = createdResult.Value.Should().BeOfType<WorkspaceDto>().Subject;
+
 
         workspace.Name.Should().Be("New Workspace");
 
@@ -97,8 +109,9 @@ public class WorkspaceControllerTests : IDisposable
         var result = await _controller.CreateWorkspace(request);
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var workspace = okResult.Value.Should().BeOfType<WorkspaceDto>().Subject;
+        var createdResult = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
+        var workspace = createdResult.Value.Should().BeOfType<WorkspaceDto>().Subject;
+
 
         var member = _dbHelper.Context.WorkspaceMembers
             .FirstOrDefault(wm => wm.WorkspaceId == workspace.Id && wm.UserId == 1);
@@ -167,13 +180,13 @@ public class WorkspaceControllerTests : IDisposable
         var result = await _controller.InviteUser(request);
 
         // Assert
-        result.Should().BeOfType<OkObjectResult>();
+        result.Should().BeOfType<OkResult>();
 
-        var member = _dbHelper.Context.WorkspaceMembers
-            .FirstOrDefault(wm => wm.WorkspaceId == 1 && wm.UserId == 2);
+        var invitation = _dbHelper.Context.WorkspaceInvitations
+            .FirstOrDefault(wi => wi.WorkspaceId == 1 && wi.InviteeId == 2);
 
-        member.Should().NotBeNull();
-        member!.Role.Should().Be("Member");
+        invitation.Should().NotBeNull();
+        invitation!.Status.Should().Be(InvitationStatus.Pending);
     }
 
     [Fact]
@@ -357,6 +370,11 @@ public class WorkspaceControllerTests : IDisposable
             .FirstOrDefault(wm => wm.WorkspaceId == 1 && wm.UserId == 2);
 
         member.Should().BeNull();
+
+        // Verify SignalR notification was sent
+        _hubContextMock.Verify(
+            x => x.Clients.User("2").SendCoreAsync("UserRemovedFromWorkspace", It.Is<object[]>(a => (int)a[0] == 1), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     #endregion

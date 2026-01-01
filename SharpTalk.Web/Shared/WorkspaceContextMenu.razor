@@ -1,0 +1,52 @@
+@using SharpTalk.Shared.DTOs
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible)
+{
+    <div class="context-menu" style="top: @(Y)px; left: @(X)px;" @onclick:stopPropagation @oncontextmenu:preventDefault>
+        @if (IsOwner)
+        {
+            <div class="context-menu-item disabled" title="Owners cannot leave. Transfer ownership first.">
+                <span class="icon">🚪</span> Leave Workspace
+            </div>
+        }
+        else
+        {
+            <div class="context-menu-item danger" @onclick="HandleLeaveClick">
+                <span class="icon">🚪</span> Leave Workspace
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool IsVisible { get; set; }
+    private double X { get; set; }
+    private double Y { get; set; }
+    private bool IsOwner { get; set; }
+    private int WorkspaceId { get; set; }
+
+    [Parameter] public EventCallback<int> OnLeaveWorkspace { get; set; }
+
+    public void Show(double x, double y, int workspaceId, bool isOwner)
+    {
+        X = x;
+        Y = y;
+        WorkspaceId = workspaceId;
+        IsOwner = isOwner;
+        IsVisible = true;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        IsVisible = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleLeaveClick()
+    {
+        Hide();
+        await OnLeaveWorkspace.InvokeAsync(WorkspaceId);
+    }
+}

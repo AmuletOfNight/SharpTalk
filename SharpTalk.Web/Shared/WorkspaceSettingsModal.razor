@@ -449,12 +449,12 @@
                     <p class="text-danger">This action cannot be undone. All channels, messages, and members will be permanently deleted.</p>
                     <div class="mt-3">
                         <label class="form-label">Type <strong>@Workspace?.Name</strong> to confirm:</label>
-                        <input type="text" class="form-control" @bind="deleteConfirmation" placeholder="Enter workspace name" />
+                        <input type="text" class="form-control" @bind="deleteConfirmation" @bind:event="oninput" placeholder="Enter workspace name" />
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseDeleteWorkspaceModal">Cancel</button>
-                    <button type="button" class="btn btn-danger" @onclick="HandleDeleteWorkspace" disabled="@IsDeletingWorkspace || deleteConfirmation != Workspace?.Name">
+                    <button type="button" class="btn btn-danger" @onclick="HandleDeleteWorkspace" disabled="@(!CanDeleteWorkspace)">
                         @(IsDeletingWorkspace ? "Deleting..." : "Delete Workspace")
                     </button>
                 </div>
@@ -861,9 +861,13 @@
         StateHasChanged();
     }
 
+    private bool CanDeleteWorkspace => !IsDeletingWorkspace && 
+        Workspace != null && 
+        string.Equals(deleteConfirmation?.Trim(), Workspace.Name?.Trim(), StringComparison.Ordinal);
+
     private async Task HandleDeleteWorkspace()
     {
-        if (Workspace == null || deleteConfirmation != Workspace.Name) return;
+        if (!CanDeleteWorkspace) return;
 
         IsDeletingWorkspace = true;
         Error = "";
