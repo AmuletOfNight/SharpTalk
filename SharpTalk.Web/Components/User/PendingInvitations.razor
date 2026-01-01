@@ -1,0 +1,72 @@
+@using SharpTalk.Shared.DTOs
+@using SharpTalk.Web.Services
+@inject WorkspaceService WorkspaceService
+
+<div class="pending-invitations">
+    <h3>Pending Invitations</h3>
+    @if (isLoading)
+    {
+        <div class="loading">Loading...</div>
+    }
+    else if (invitations == null || !invitations.Any())
+    {
+        <div class="empty-state">No pending invitations.</div>
+    }
+    else
+    {
+        <div class="invitation-list">
+            @foreach (var invite in invitations)
+            {
+                <div class="invitation-item">
+                    <div class="invite-info">
+                        <span class="workspace-name">@invite.WorkspaceName</span>
+                        <span class="inviter-name">Invited by @invite.InviterUsername</span>
+                        <span class="invite-date">@invite.CreatedAt.ToLocalTime().ToString("g")</span>
+                    </div>
+                    <div class="invite-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="() => AcceptInvitation(invite.Id)">Accept</button>
+                        <button class="btn btn-secondary btn-sm" @onclick="() => DeclineInvitation(invite.Id)">Decline</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<WorkspaceInvitationDto> invitations = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvitations();
+    }
+
+    private async Task LoadInvitations()
+    {
+        isLoading = true;
+        invitations = await WorkspaceService.GetMyInvitationsAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task AcceptInvitation(int id)
+    {
+        var success = await WorkspaceService.AcceptInvitationAsync(id);
+        if (success)
+        {
+            await LoadInvitations();
+            // detailed refresh could be triggered via event or reloading entire state
+            // For now, removing from list is enough visual feedback
+        }
+    }
+
+    private async Task DeclineInvitation(int id)
+    {
+        var success = await WorkspaceService.DeclineInvitationAsync(id);
+        if (success)
+        {
+            await LoadInvitations();
+        }
+    }
+}

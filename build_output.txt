@@ -1,0 +1,14 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SharpTalk.Shared -> C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Shared\bin\Debug\net10.0\SharpTalk.Shared.dll
+C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\Layout\MainLayout.razor(444,19): warning CS8602: Dereference of a possibly null reference. [C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\SharpTalk.Web.csproj]
+C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\Shared\WorkspaceSettingsModal.razor(259,69): error CS0234: The type or namespace name 'Enums' does not exist in the namespace 'SharpTalk.Web.Shared' (are you missing an assembly reference?) [C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\SharpTalk.Web.csproj]
+
+Build FAILED.
+
+C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\Layout\MainLayout.razor(444,19): warning CS8602: Dereference of a possibly null reference. [C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\SharpTalk.Web.csproj]
+C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\Shared\WorkspaceSettingsModal.razor(259,69): error CS0234: The type or namespace name 'Enums' does not exist in the namespace 'SharpTalk.Web.Shared' (are you missing an assembly reference?) [C:\Users\jasen\Desktop\SharpTalk\SharpTalk.Web\SharpTalk.Web.csproj]
+    1 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:02.40

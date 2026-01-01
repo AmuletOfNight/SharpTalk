@@ -16,6 +16,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<Attachment> Attachments { get; set; } = null!;
     public DbSet<Reaction> Reactions { get; set; } = null!;
 
+    public DbSet<WorkspaceInvitation> WorkspaceInvitations { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -60,5 +62,23 @@ public class ApplicationDbContext : DbContext
             .WithMany(m => m.Attachments)
             .HasForeignKey(a => a.MessageId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Workspace Invitation configuration
+        modelBuilder.Entity<WorkspaceInvitation>()
+            .HasIndex(wi => wi.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<WorkspaceInvitation>()
+            .HasIndex(wi => new { wi.WorkspaceId, wi.InviteeId })
+            .IsUnique()
+            .HasFilter("\"InviteeId\" IS NOT NULL AND \"Status\" = 0"); // 0 = Pending
+
+        modelBuilder.Entity<WorkspaceInvitation>()
+            .Property(wi => wi.Status)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<WorkspaceInvitation>()
+             .Property(wi => wi.Type)
+             .HasConversion<int>();
     }
 }

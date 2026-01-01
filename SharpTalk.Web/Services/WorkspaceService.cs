@@ -133,4 +133,67 @@ public class WorkspaceService
         var response = await _httpClient.PutAsJsonAsync($"api/workspace/{workspaceId}/members/{userId}/role", request);
         return response.IsSuccessStatusCode;
     }
+
+
+    public async Task<string?> CreateInviteLinkAsync(CreateInviteLinkRequest request)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsJsonAsync("api/workspace/invite-link", request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var code = await response.Content.ReadAsStringAsync();
+            // Remove double quotes if present (Blazor WASM HttpClient returns JSON strings sometimes)
+            return code.Trim('"');
+        }
+        return null;
+    }
+
+    public async Task<List<WorkspaceInvitationDto>> GetWorkspaceInvitationsAsync(int workspaceId)
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<WorkspaceInvitationDto>>($"api/workspace/{workspaceId}/invitations") ?? new List<WorkspaceInvitationDto>();
+    }
+
+    public async Task<bool> RevokeInvitationAsync(int invitationId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/workspace/invitations/{invitationId}");
+        return response.IsSuccessStatusCode;
+    }
+
+    // User Invitation interactions
+    public async Task<List<WorkspaceInvitationDto>> GetMyInvitationsAsync()
+    {
+        await SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<WorkspaceInvitationDto>>("api/invitation") ?? new List<WorkspaceInvitationDto>();
+    }
+
+    public async Task<bool> AcceptInvitationAsync(int invitationId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsync($"api/invitation/{invitationId}/accept", null);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> DeclineInvitationAsync(int invitationId)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsync($"api/invitation/{invitationId}/decline", null);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<WorkspaceInvitationDto?> GetLinkInfoAsync(string code)
+    {
+        // Public endpoint, auth header is optional (maybe? logic said AsNoTracking and didn't enforce user check for fetching info, but controller doesn't have [Authorize])
+        // Checking Controller... GetLinkInfo does NOT have [Authorize].
+        return await _httpClient.GetFromJsonAsync<WorkspaceInvitationDto>($"api/invitation/link/{code}");
+    }
+
+    public async Task<bool> JoinByLinkAsync(string code)
+    {
+        await SetAuthHeader();
+        var response = await _httpClient.PostAsync($"api/invitation/link/{code}/join", null);
+        return response.IsSuccessStatusCode;
+    }
 }

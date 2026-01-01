@@ -1,7 +1,9 @@
 @using SharpTalk.Shared.DTOs
+@using SharpTalk.Shared.Enums
 @using SharpTalk.Web.Services
 @inject WorkspaceService WorkspaceService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
 @if (Show)
 {
@@ -25,6 +27,10 @@
                                 <li class="nav-item">
                                     <button class="nav-link w-100 text-start @(ActiveTab == "Members" ? "active" : "")"
                                 @onclick='async () => { ActiveTab = "Members"; await LoadMembers(); }'>Members</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link w-100 text-start @(ActiveTab == "Invitations" ? "active" : "")"
+                                @onclick='async () => { ActiveTab = "Invitations"; await LoadInvitations(); }'>Invitations</button>
                                 </li>
                             </ul>
                         </div>
@@ -184,6 +190,96 @@
                                         No members found.
                                     </div>
                                 }
+                            }
+                        </div>
+
+                    }
+                    else if (ActiveTab == "Invitations")
+                    {
+                         <div class="settings-content p-4 flex-grow-1 overflow-auto">
+                            <h4>Invitations</h4>
+                            <p class="text-muted small">Manage workspace invitations and create invite links.</p>
+
+                            @if (!string.IsNullOrEmpty(Error))
+                            {
+                                <div class="alert alert-danger mt-3">@Error</div>
+                            }
+                            @if (!string.IsNullOrEmpty(Success))
+                            {
+                                <div class="alert alert-success mt-3">@Success</div>
+                            }
+
+                             <!-- Create Invite Link Section -->
+                            <div class="card mb-4" style="background-color: #2f3136; border-color: #202225;">
+                                <div class="card-body">
+                                    <h6 class="fw-bold text-light mb-3">Create Invite Link</h6>
+                                    <div class="d-flex gap-2 align-items-end">
+                                        <div class="flex-grow-1">
+                                            <label class="form-label small text-muted">Max Uses (Optional)</label>
+                                            <input type="number" class="form-control" @bind="newLinkMaxUses" placeholder="No limit" min="1" />
+                                        </div>
+                                         <div class="flex-grow-1">
+                                            <label class="form-label small text-muted">Expires In (Optional)</label>
+                                            <select class="form-select" @bind="newLinkExpirationDays">
+                                                <option value="0">Never</option>
+                                                <option value="1">1 Day</option>
+                                                <option value="7">7 Days</option>
+                                                <option value="30">30 Days</option>
+                                            </select>
+                                        </div>
+                                        <button class="btn btn-primary" @onclick="CreateInviteLink" disabled="@IsCreatingLink">
+                                            @(IsCreatingLink ? "Creating..." : "Create Link")
+                                        </button>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(CreatedLink))
+                                    {
+                                        <div class="mt-3 p-2 rounded bg-dark border border-secondary d-flex justify-content-between align-items-center">
+                                            <code class="text-light">@CreatedLink</code>
+                                            <button class="btn btn-sm btn-outline-light" @onclick="CopyLinkToClipboard">Copy</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <h6 class="fw-bold text-light mt-4">Active Invitations</h6>
+                            @if (isLoadingInvitations)
+                            {
+                                 <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                            }
+                            else if (Invitations.Any())
+                            {
+                                <div class="list-group mt-3">
+                                    @foreach (var invite in Invitations)
+                                    {
+                                        <div class="list-group-item d-flex justify-content-between align-items-center" style="background-color: #2f3136; border-color: #202225;">
+                                            <div>
+                                                @if (invite.Type == InvitationType.Direct)
+                                                {
+                                                     <div><strong>Direct Invite</strong> to @invite.InviteeUsername</div>
+                                                }
+                                                else
+                                                {
+                                                     <div><strong>Link Invite</strong></div>
+                                                     <code class="small text-muted">.../join/@invite.Code</code>
+                                                }
+                                                <small class="text-muted d-block">
+                                                    Created @invite.CreatedAt.ToString("MMM dd") • 
+                                                    Uses: @invite.UseCount / @(invite.MaxUses?.ToString() ?? "∞") • 
+                                                    Expires: @(invite.ExpiresAt?.ToString("MMM dd") ?? "Never")
+                                                </small>
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RevokeInvitation(invite.Id)">Revoke</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted">No active invitations.</p>
                             }
                         </div>
                     }
@@ -399,6 +495,14 @@
     private bool IsUpdatingDescription = false;
     private bool IsInviting = false;
 
+    // Invitations
+    private List<WorkspaceInvitationDto> Invitations = new();
+    private bool isLoadingInvitations = false;
+    private int? newLinkMaxUses;
+    private int newLinkExpirationDays = 0; // 0 = Never
+    private bool IsCreatingLink = false;
+    private string CreatedLink = "";
+
     // Remove member modal
     private bool ShowRemoveMemberModal = false;
     private WorkspaceMemberDto? memberToRemove;
@@ -543,7 +647,7 @@
             var success = await WorkspaceService.InviteUserAsync(request);
             if (success)
             {
-                Success = "User invited successfully!";
+                Success = "Invitation sent successfully!";
                 inviteUsername = "";
                 Workspace!.MemberCount++;
                 await LoadMembers();
@@ -796,21 +900,16 @@
         IsLeavingWorkspace = true;
         Error = "";
         Success = "";
+        Error = "";
+        Success = "";
         StateHasChanged();
-
+        
         try
         {
-            var success = await WorkspaceService.LeaveWorkspaceAsync(Workspace.Id);
-            if (success)
-            {
-                Close();
-                CloseLeaveWorkspaceModal();
-                Navigation.NavigateTo("/");
-            }
-            else
-            {
-                Error = "Failed to leave workspace.";
-            }
+             await WorkspaceService.LeaveWorkspaceAsync(Workspace.Id);
+             Close();
+             CloseLeaveWorkspaceModal();
+             Navigation.NavigateTo("/");
         }
         catch (Exception ex)
         {
@@ -822,4 +921,99 @@
             StateHasChanged();
         }
     }
+
+    private async Task LoadInvitations()
+    {
+        if (Workspace == null) return;
+        isLoadingInvitations = true;
+        StateHasChanged();
+
+        try
+        {
+            Invitations = await WorkspaceService.GetWorkspaceInvitationsAsync(Workspace.Id);
+        }
+        catch (Exception ex)
+        {
+            Error = $"Failed to load invitations: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingInvitations = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateInviteLink()
+    {
+        if (Workspace == null) return;
+        IsCreatingLink = true;
+        CreatedLink = "";
+        Error = "";
+        StateHasChanged();
+
+        try 
+        {
+            DateTime? expiresAt = newLinkExpirationDays > 0 ? DateTime.UtcNow.AddDays(newLinkExpirationDays) : null;
+            var request = new CreateInviteLinkRequest 
+            { 
+                WorkspaceId = Workspace.Id,
+                MaxUses = newLinkMaxUses,
+                ExpiresAt = expiresAt
+            };
+
+            var code = await WorkspaceService.CreateInviteLinkAsync(request);
+            if (!string.IsNullOrEmpty(code))
+            {
+                // Construct full URL (assuming base URL)
+                var uri = Navigation.BaseUri;
+                CreatedLink = $"{uri}join/{code}";
+                await LoadInvitations();
+            }
+            else
+            {
+                Error = "Failed to create invite link.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error creating link: {ex.Message}";
+        }
+        finally
+        {
+            IsCreatingLink = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RevokeInvitation(int id)
+    {
+        try
+        {
+            var success = await WorkspaceService.RevokeInvitationAsync(id);
+            if (success)
+            {
+                await LoadInvitations();
+            }
+            else 
+            {
+                Error = "Failed to revoke invitation.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error revoking invitation: {ex.Message}";
+        }
+    }
+
+    private async Task CopyLinkToClipboard()
+    {
+        if (!string.IsNullOrEmpty(CreatedLink))
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", CreatedLink);
+            Success = "Link copied to clipboard!";
+            StateHasChanged();
+        }
+    }
+
+
 }

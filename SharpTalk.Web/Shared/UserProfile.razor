@@ -1,23 +1,26 @@
 @using SharpTalk.Shared.DTOs
 @using SharpTalk.Web.Services
 @inject UserService UserService
+@inject WorkspaceService WorkspaceService
 @inject UrlUtilityService UrlUtilityService
+@using SharpTalk.Web.Components.User
 @inject IJSRuntime JSRuntime
 
 <div class="user-profile-container">
-    <div class="user-profile"
-         @onclick="HandleClick"
-         @ref="userProfileElement">
+    <div class="user-profile" @onclick="HandleClick" @ref="userProfileElement">
         <div class="user-avatar-wrapper">
             <img src="@UrlUtilityService.GetAvatarUrl(CurrentUser?.AvatarUrl, "m")"
-                 class="user-avatar @(CurrentUser?.Status?.ToLower() ?? "offline")"
-                 alt="@CurrentUser?.Username" />
+                class="user-avatar @(CurrentUser?.Status?.ToLower() ?? "offline")" alt="@CurrentUser?.Username" />
         </div>
         <div class="user-info">
             <span class="username">@CurrentUser?.Username</span>
             <span class="status-text">@GetStatusText()</span>
         </div>
         <span class="dropdown-arrow @(IsDropdownOpen ? "open" : "")">▼</span>
+        @if (HasPendingInvitations)
+        {
+            <span class="notification-dot"></span>
+        }
     </div>
 
     @if (IsDropdownOpen)
@@ -29,11 +32,37 @@
             <button class="dropdown-item" @onclick="Logout">
                 <span class="icon">🚪</span> Logout
             </button>
+            @if (HasPendingInvitations)
+            {
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item" @onclick="OpenPendingInvitations">
+                    <span class="icon">📩</span> Invitations
+                    <span class="badge bg-danger ms-auto">@PendingInvitationCount</span>
+                </button>
+            }
         </div>
     }
 </div>
 
 <UserSettingsModal @ref="SettingsModal" />
+
+@if (ShowPendingInvitationsModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Pending Invitations</h5>
+                    <button type="button" class="btn-close" @onclick="ClosePendingInvitationsModal"></button>
+                </div>
+                <div class="modal-body">
+                    <PendingInvitations />
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private UserInfo? CurrentUser;
@@ -42,9 +71,14 @@
     private UserSettingsModal? SettingsModal;
     private ElementReference userProfileElement;
 
+    private bool ShowPendingInvitationsModal = false;
+    private int PendingInvitationCount = 0;
+    private bool HasPendingInvitations => PendingInvitationCount > 0;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadUserInfo();
+        await CheckPendingInvitations();
         UserService.OnUserInfoChanged += HandleUserInfoChanged;
     }
 
@@ -126,5 +160,25 @@
     public void Dispose()
     {
         UserService.OnUserInfoChanged -= HandleUserInfoChanged;
+    }
+    private async Task CheckPendingInvitations()
+    {
+        var invites = await WorkspaceService.GetMyInvitationsAsync();
+        PendingInvitationCount = invites.Count;
+        StateHasChanged();
+    }
+
+    private void OpenPendingInvitations()
+    {
+        IsDropdownOpen = false;
+        IsDropdownVisible = false;
+        ShowPendingInvitationsModal = true;
+    }
+
+    private void ClosePendingInvitationsModal()
+    {
+        ShowPendingInvitationsModal = false;
+        // Refresh count after closing
+        _ = CheckPendingInvitations();
     }
 }

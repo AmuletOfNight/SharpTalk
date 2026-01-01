@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using SharpTalk.Api.Data;
 using SharpTalk.Api.Entities;
 using SharpTalk.Shared.DTOs;
+using SharpTalk.Shared.Enums;
 using StackExchange.Redis;
 using System.Security.Claims;
 
@@ -169,14 +170,102 @@ public class WorkspaceController : ControllerBase
 
         if (exists) return BadRequest("User is already a member");
 
-        var member = new WorkspaceMember
+        var pendingInvite = await _context.WorkspaceInvitations
+            .AsNoTracking()
+            .AnyAsync(wi => wi.WorkspaceId == request.WorkspaceId && wi.InviteeId == userToInvite.Id && wi.Status == InvitationStatus.Pending);
+
+        if (pendingInvite) return BadRequest("User already has a pending invitation");
+
+        var invitation = new WorkspaceInvitation
         {
             WorkspaceId = request.WorkspaceId,
-            UserId = userToInvite.Id,
-            Role = "Member"
+            InviterId = userId,
+            InviteeId = userToInvite.Id,
+            Type = InvitationType.Direct,
+            Status = InvitationStatus.Pending
         };
 
-        _context.WorkspaceMembers.Add(member);
+        _context.WorkspaceInvitations.Add(invitation);
+        await _context.SaveChangesAsync();
+
+        return Ok();
+    }
+
+    [HttpPost("invite-link")]
+    public async Task<ActionResult<string>> CreateInviteLink(CreateInviteLinkRequest request)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        var workspace = await _context.Workspaces
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == request.WorkspaceId);
+
+        if (workspace == null) return NotFound("Workspace not found");
+        if (workspace.OwnerId != userId) return Forbid();
+
+        var code = Guid.NewGuid().ToString("N");
+        var invitation = new WorkspaceInvitation
+        {
+            WorkspaceId = request.WorkspaceId,
+            InviterId = userId,
+            Type = InvitationType.Link,
+            Status = InvitationStatus.Pending,
+            Code = code,
+            MaxUses = request.MaxUses,
+            ExpiresAt = request.ExpiresAt,
+        };
+
+        _context.WorkspaceInvitations.Add(invitation);
+        await _context.SaveChangesAsync();
+
+        return Ok(code);
+    }
+
+    [HttpGet("{workspaceId}/invitations")]
+    public async Task<ActionResult<List<WorkspaceInvitationDto>>> GetWorkspaceInvitations(int workspaceId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var workspace = await _context.Workspaces.FindAsync(workspaceId);
+
+        if (workspace == null) return NotFound();
+        if (workspace.OwnerId != userId) return Forbid();
+
+        var invitations = await _context.WorkspaceInvitations
+            .AsNoTracking()
+            .Where(wi => wi.WorkspaceId == workspaceId && wi.Status == InvitationStatus.Pending) // Show only pending/active
+            .Include(wi => wi.Invitee)
+            .OrderByDescending(wi => wi.CreatedAt)
+            .Select(wi => new WorkspaceInvitationDto
+            {
+                Id = wi.Id,
+                WorkspaceId = wi.WorkspaceId,
+                InviterId = wi.InviterId,
+                InviteeId = wi.InviteeId,
+                InviteeUsername = wi.Invitee != null ? wi.Invitee.Username : null,
+                Type = wi.Type,
+                Code = wi.Code,
+                MaxUses = wi.MaxUses,
+                UseCount = wi.UseCount,
+                ExpiresAt = wi.ExpiresAt,
+                CreatedAt = wi.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(invitations);
+    }
+
+    [HttpDelete("invitations/{invitationId}")]
+    public async Task<IActionResult> RevokeInvitation(int invitationId)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var invitation = await _context.WorkspaceInvitations
+            .Include(wi => wi.Workspace)
+            .FirstOrDefaultAsync(wi => wi.Id == invitationId);
+
+        if (invitation == null) return NotFound();
+        if (invitation.Workspace.OwnerId != userId) return Forbid();
+
+        invitation.Status = InvitationStatus.Revoked;
         await _context.SaveChangesAsync();
 
         return Ok();
@@ -194,7 +283,7 @@ public class WorkspaceController : ControllerBase
         if (!isMember) return Forbid();
 
         var cacheKey = $"workspace_members_{workspaceId}";
-        
+
         if (_cache.TryGetValue(cacheKey, out List<UserStatusDto>? cachedMembers) && cachedMembers != null)
         {
             // Update online status from Redis (gracefully handle Redis failures)
@@ -267,7 +356,7 @@ public class WorkspaceController : ControllerBase
         if (!isMember) return Forbid();
 
         var cacheKey = $"workspace_members_detailed_{workspaceId}";
-        
+
         if (_cache.TryGetValue(cacheKey, out List<WorkspaceMemberDto>? cachedMembers) && cachedMembers != null)
         {
             // Update online status from Redis (gracefully handle Redis failures)
