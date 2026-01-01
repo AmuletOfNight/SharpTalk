@@ -1,8 +1,10 @@
 // User Profile Gesture Support
 // Provides tap-and-hold functionality for the user profile pill
 
-window.setupUserProfileGestures = function (element) {
+window.setupUserProfileGestures = function (element, dotNetHelper) {
     if (!element) return;
+
+    window.userProfileDotNetHelper = dotNetHelper;
 
     let holdTimer = null;
     let isHolding = false;
@@ -59,15 +61,12 @@ window.setupUserProfileGestures = function (element) {
 document.addEventListener('click', function (e) {
     const dropdown = document.querySelector('.user-dropdown');
     const userProfile = document.querySelector('.user-profile');
-    
+
     if (dropdown && userProfile) {
         if (!dropdown.contains(e.target) && !userProfile.contains(e.target)) {
-            // Trigger close event
-            const event = new CustomEvent('closeuserdropdown', {
-                bubbles: true,
-                cancelable: true
-            });
-            document.dispatchEvent(event);
+            if (window.userProfileDotNetHelper) {
+                window.userProfileDotNetHelper.invokeMethodAsync('CloseDropdown');
+            }
         }
     }
 });

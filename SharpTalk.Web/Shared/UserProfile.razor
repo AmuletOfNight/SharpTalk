@@ -5,6 +5,7 @@
 @inject UrlUtilityService UrlUtilityService
 @using SharpTalk.Web.Components.User
 @inject IJSRuntime JSRuntime
+@implements IDisposable
 
 <div class="user-profile-container">
     <div class="user-profile" @onclick="HandleClick" @ref="userProfileElement">
@@ -32,14 +33,14 @@
             <button class="dropdown-item" @onclick="Logout">
                 <span class="icon">🚪</span> Logout
             </button>
-            @if (HasPendingInvitations)
-            {
-                <div class="dropdown-divider"></div>
-                <button class="dropdown-item" @onclick="OpenPendingInvitations">
-                    <span class="icon">📩</span> Invitations
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" @onclick="OpenPendingInvitations">
+                <span class="icon">📩</span> Invitations
+                @if (HasPendingInvitations)
+                {
                     <span class="badge bg-danger ms-auto">@PendingInvitationCount</span>
-                </button>
-            }
+                }
+            </button>
         </div>
     }
 </div>
@@ -70,6 +71,7 @@
     private bool IsDropdownVisible = false;
     private UserSettingsModal? SettingsModal;
     private ElementReference userProfileElement;
+    private DotNetObjectReference<UserProfile>? objRef;
 
     private bool ShowPendingInvitationsModal = false;
     private int PendingInvitationCount = 0;
@@ -86,7 +88,8 @@
     {
         if (firstRender)
         {
-            await JSRuntime.InvokeVoidAsync("setupUserProfileGestures", userProfileElement);
+            objRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setupUserProfileGestures", userProfileElement, objRef);
         }
     }
 
@@ -134,9 +137,16 @@
 
     private void OpenSettings()
     {
-        IsDropdownOpen = false;
-        IsDropdownVisible = false;
+        CloseDropdown();
         SettingsModal?.Open();
+    }
+
+    [JSInvokable]
+    public void CloseDropdown()
+    {
+        IsDropdownVisible = false;
+        IsDropdownOpen = false;
+        StateHasChanged();
     }
 
     private async Task Logout()
@@ -160,6 +170,7 @@
     public void Dispose()
     {
         UserService.OnUserInfoChanged -= HandleUserInfoChanged;
+        objRef?.Dispose();
     }
     private async Task CheckPendingInvitations()
     {

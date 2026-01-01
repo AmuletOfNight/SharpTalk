@@ -63,7 +63,32 @@
             await LocalStorage.SetItemAsync("authToken", authResponse.Token);
             await ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticatedWithUserInfo(authResponse.Token,
             authResponse);
-            Navigation.NavigateTo("/home");
+
+            var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+            string? returnUrl = null;
+            
+            if (!string.IsNullOrEmpty(uri.Query))
+            {
+                var query = uri.Query.TrimStart('?');
+                foreach (var param in query.Split('&'))
+                {
+                    var parts = param.Split('=');
+                    if (parts.Length == 2 && parts[0] == "returnUrl")
+                    {
+                        returnUrl = System.Net.WebUtility.UrlDecode(parts[1]);
+                        break;
+                    }
+                }
+            }
+            
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                Navigation.NavigateTo(returnUrl);
+            }
+            else
+            {
+                Navigation.NavigateTo("/home");
+            }
         }
         else
         {

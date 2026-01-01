@@ -147,6 +147,7 @@ body {
     .sidebar {
         width: 100% !important;
     }
+
     .sidebar-content {
         align-items: stretch !important;
     }
@@ -627,6 +628,7 @@ label.form-label {
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -638,6 +640,7 @@ label.form-label {
         opacity: 1;
         transform: translateY(0);
     }
+
     to {
         opacity: 0;
         transform: translateY(10px);
@@ -1022,31 +1025,7 @@ label.form-label {
     }
 }
 
-/* User Profile Component - Floating Pill */
-.user-profile-container {
-    position: fixed;
-    bottom: 16px;
-    left: 16px;
-    z-index: 1000;
-}
-
-.user-profile {
-    display: flex;
-    align-items: center;
-    padding: 8px 16px;
-    cursor: pointer;
-    background-color: #292b2f;
-    border-radius: 24px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: background-color 0.2s, box-shadow 0.2s;
-    max-width: 280px;
-}
-
-.user-profile:hover {
-    background-color: #36393f;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-}
-
+/* User profile styles are consolidated at the end of the file */
 .user-avatar-wrapper {
     position: relative;
     flex-shrink: 0;
@@ -1152,7 +1131,8 @@ label.form-label {
         right: 20px;
         max-width: none;
         z-index: 1000;
-        pointer-events: none; /* Allow clicking through the container but not the pill */
+        pointer-events: none;
+        /* Allow clicking through the container but not the pill */
     }
 
     .user-profile {
@@ -1360,7 +1340,8 @@ label.form-label {
 }
 
 .message-avatar {
-    width: 32px; /* Slightly smaller */
+    width: 32px;
+    /* Slightly smaller */
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
@@ -1385,7 +1366,8 @@ label.form-label {
 }
 
 .message-body {
-    flex: 0 1 auto; /* Don't grow, but can shrink */
+    flex: 0 1 auto;
+    /* Don't grow, but can shrink */
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -1935,7 +1917,8 @@ cropper-selection {
     clip-path: polygon(100% 0, 100% 100%, 0 100%);
     border-left: 1px solid #202225;
     border-bottom: 1px solid #202225;
-    display: none; /* Only show on mobile or specific layout */
+    display: none;
+    /* Only show on mobile or specific layout */
 }
 
 .speech-bubble-input:focus-within {
@@ -2310,6 +2293,7 @@ cropper-selection {
         transform: translateY(100px) scale(0.5);
         opacity: 0;
     }
+
     to {
         transform: translateY(0) scale(1);
         opacity: 1;
@@ -2325,6 +2309,7 @@ cropper-selection {
         transform: translateX(-50px);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -2336,13 +2321,14 @@ cropper-selection {
     .modal-backdrop {
         z-index: 1050 !important;
     }
-    
+
     .modal {
         z-index: 1051 !important;
     }
-    
+
     .modal-dialog {
-        margin-top: 56px; /* Account for mobile nav height */
+        margin-top: 56px;
+        /* Account for mobile nav height */
     }
 }
 
@@ -2462,4 +2448,93 @@ cropper-selection {
     background-color: #5865f2;
     border-radius: 50%;
     color: white;
+}
+
+/* User Profile (User Pill) - Consolidated */
+.user-profile-container {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 1000;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    cursor: pointer;
+    background-color: #292b2f;
+    border-radius: 50px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.2s, box-shadow 0.2s;
+    max-width: 280px;
+    position: relative;
+}
+
+.user-profile:hover {
+    background-color: #36393f;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.notification-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    background-color: #ed4245;
+    border-radius: 50%;
+    border: 2px solid #292b2f;
+    box-shadow: 0 0 0 1px #292b2f;
+    z-index: 10;
+}
+
+.user-dropdown {
+    position: absolute;
+    bottom: 60px;
+    /* Above the profile pill */
+    left: 8px;
+    width: 200px;
+    background-color: #18191c;
+    border-radius: 4px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+    padding: 8px;
+    z-index: 1050;
+    /* Ensure above everything */
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px);
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.user-dropdown.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    color: #b9bbbe;
+    border-radius: 2px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px;
+}
+
+.dropdown-item:hover {
+    background-color: #5865f2;
+    color: white;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: #2f3136;
+    margin: 4px 0;
 }

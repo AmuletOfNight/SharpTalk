@@ -8,6 +8,8 @@ using SharpTalk.Shared.DTOs;
 using SharpTalk.Shared.Enums;
 using StackExchange.Redis;
 using System.Security.Claims;
+using Microsoft.AspNetCore.SignalR;
+using SharpTalk.Api.Hubs;
 
 namespace SharpTalk.Api.Controllers;
 
@@ -19,12 +21,14 @@ public class WorkspaceController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IConnectionMultiplexer _redis;
     private readonly IMemoryCache _cache;
+    private readonly IHubContext<ChatHub> _hubContext;
 
-    public WorkspaceController(ApplicationDbContext context, IConnectionMultiplexer redis, IMemoryCache cache)
+    public WorkspaceController(ApplicationDbContext context, IConnectionMultiplexer redis, IMemoryCache cache, IHubContext<ChatHub> hubContext)
     {
         _context = context;
         _redis = redis;
         _cache = cache;
+        _hubContext = hubContext;
     }
 
     [HttpPost("reorder")]
@@ -507,9 +511,40 @@ public class WorkspaceController : ControllerBase
         _context.WorkspaceMembers.Remove(member);
         await _context.SaveChangesAsync();
 
-        // Invalidate cache
+        // Invalidate cache in memory
         _cache.Remove($"workspace_members_{workspaceId}");
         _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
+        // Invalidate channel access cache in Redis
+        try
+        {
+            var db = _redis.GetDatabase();
+
+            // Invalidate user workspace list cache
+            await ChatHub.InvalidateUserWorkspaceCache(db, userId);
+
+            // Get all channels for this workspace
+            var channelIds = await _context.Channels
+                .Where(c => c.WorkspaceId == workspaceId)
+                .Select(c => c.Id)
+                .ToListAsync();
+
+            foreach (var channelId in channelIds)
+            {
+                await ChatHub.InvalidateChannelAccessCache(db, userId, channelId);
+            }
+
+            // Notify the removed user via SignalR to force UI update/redirect
+            // We find the user's connection(s) via the user-specific group or direct message
+            // Since we can't easily target a specific user ID without a custom user provider or connection mapping that might be complex to access here without IHubContext
+            // Actually, SignalR allows sending to a user ID if the IUserIdProvider is set up (which it is by default using NameIdentifier)
+            await _hubContext.Clients.User(userId.ToString()).SendAsync("UserRemovedFromWorkspace", workspaceId);
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail the request
+            Console.WriteLine($"Error invalidating cache or notifying user: {ex.Message}");
+        }
 
         return Ok();
     }
@@ -540,6 +575,27 @@ public class WorkspaceController : ControllerBase
         // Invalidate cache
         _cache.Remove($"workspace_members_{workspaceId}");
         _cache.Remove($"workspace_members_detailed_{workspaceId}");
+
+        try
+        {
+            var db = _redis.GetDatabase();
+            await ChatHub.InvalidateUserWorkspaceCache(db, userId);
+
+            // Get all channels for this workspace
+            var channelIds = await _context.Channels
+                .Where(c => c.WorkspaceId == workspaceId)
+                .Select(c => c.Id)
+                .ToListAsync();
+
+            foreach (var channelId in channelIds)
+            {
+                await ChatHub.InvalidateChannelAccessCache(db, userId, channelId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error invalidating cache: {ex.Message}");
+        }
 
         return Ok();
     }

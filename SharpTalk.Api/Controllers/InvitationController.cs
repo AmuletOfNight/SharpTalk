@@ -14,10 +14,12 @@ namespace SharpTalk.Api.Controllers;
 public class InvitationController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
 
-    public InvitationController(ApplicationDbContext context)
+    public InvitationController(ApplicationDbContext context, Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     [Authorize]
@@ -89,6 +91,10 @@ public class InvitationController : ControllerBase
 
         invitation.Status = InvitationStatus.Accepted;
         await _context.SaveChangesAsync();
+
+        // Invalidate cache
+        _cache.Remove($"workspace_members_{invitation.WorkspaceId}");
+        _cache.Remove($"workspace_members_detailed_{invitation.WorkspaceId}");
 
         return Ok();
     }
@@ -214,6 +220,10 @@ public class InvitationController : ControllerBase
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
+
+            // Invalidate cache
+            _cache.Remove($"workspace_members_{invitation.WorkspaceId}");
+            _cache.Remove($"workspace_members_detailed_{invitation.WorkspaceId}");
 
             return Ok(new WorkspaceDto
             {

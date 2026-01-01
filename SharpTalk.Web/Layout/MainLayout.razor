@@ -10,7 +10,8 @@
     {
         @if (isMobile)
         {
-            <MobileNavigation CurrentView="currentMobileView" OnBack="GoBack" OnMenuToggle="ToggleMenu" CurrentChannel="CurrentChannel" CurrentWorkspace="CurrentWorkspace" />
+            <MobileNavigation CurrentView="currentMobileView" OnBack="GoBack" OnMenuToggle="ToggleMenu"
+        CurrentChannel="CurrentChannel" CurrentWorkspace="CurrentWorkspace" />
         }
 
         <div class="sidebar @(isMobile && currentMobileView == MobileView.WorkspaceList ? "mobile-visible" : "")">
@@ -26,21 +27,21 @@
                 }
                 else
                 {
-                    <Sidebar Workspaces="Workspaces" 
-                             ActiveWorkspaceId="ActiveWorkspaceId"
-                             OnWorkspaceSelected="HandleWorkspaceSelected" 
-                             OnWorkspacesReordered="HandleWorkspacesReordered"
-                             OnWorkspaceCreatedCallback="HandleWorkspaceCreated" />
+                    <Sidebar Workspaces="Workspaces" ActiveWorkspaceId="ActiveWorkspaceId"
+                OnWorkspaceSelected="HandleWorkspaceSelected" OnWorkspacesReordered="HandleWorkspacesReordered"
+                OnWorkspaceCreatedCallback="HandleWorkspaceCreated" />
                 }
             </div>
         </div>
         @if (!isMobile || currentMobileView != MobileView.ChatArea)
         {
-            <UserProfile />
+            <UserProfile @key="UserService.CurrentUser?.Id" />
         }
 
-    <WorkspaceSettingsModal @ref="WorkspaceSettingsModalRef" Workspace="CurrentWorkspace" IsOwner="IsWorkspaceOwner" OnWorkspaceChanged="HandleWorkspaceChanged" />
-    <GroupDMSettingsModal @ref="GroupDMSettingsModalRef" Channel="CurrentChannel" OnSettingsClosed="HandleGroupSettingsClosed" OnGroupLeft="HandleGroupLeft" />
+        <WorkspaceSettingsModal @ref="WorkspaceSettingsModalRef" Workspace="CurrentWorkspace" IsOwner="IsWorkspaceOwner"
+        OnWorkspaceChanged="HandleWorkspaceChanged" />
+        <GroupDMSettingsModal @ref="GroupDMSettingsModalRef" Channel="CurrentChannel"
+        OnSettingsClosed="HandleGroupSettingsClosed" OnGroupLeft="HandleGroupLeft" />
 
         @if (IsLoading)
         {
@@ -60,17 +61,15 @@
         else if (ActiveWorkspaceId == -2)
         {
             <div class="channel-sidebar @(isMobile && currentMobileView == MobileView.ChannelList ? "mobile-visible" : "")">
-                <DirectMessagesList @ref="DirectMessagesListRef"
-                                    ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
-                                    OnChannelSelected="HandleChannelSelected" />
+                <DirectMessagesList @ref="DirectMessagesListRef" ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
+            OnChannelSelected="HandleChannelSelected" />
             </div>
         }
         else if (CurrentWorkspace != null)
         {
             <div class="channel-sidebar @(isMobile && currentMobileView == MobileView.ChannelList ? "mobile-visible" : "")">
-                <ChannelList Workspace="CurrentWorkspace"
-                             ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
-                             OnChannelSelected="HandleChannelSelected" />
+                <ChannelList Workspace="CurrentWorkspace" ActiveChannelId="@(CurrentChannel?.Id ?? 0)"
+            OnChannelSelected="HandleChannelSelected" />
             </div>
         }
 
@@ -142,6 +141,7 @@
     protected override async Task OnInitializedAsync()
     {
         AuthStateProvider.AuthenticationStateChanged += HandleAuthenticationStateChanged;
+        WorkspaceService.OnWorkspacesChanged += HandleWorkspaceListChanged;
 
         try
         {
@@ -196,6 +196,7 @@
 
         if (IsAuthenticated)
         {
+            ChatService.OnUserRemovedFromWorkspace += HandleUserRemovedFromWorkspace;
             await ChatService.InitializeAsync();
             await LoadDataAsync();
         }
@@ -207,7 +208,7 @@
         {
             Workspaces = await WorkspaceService.GetMyWorkspacesAsync();
             var user = await UserService.GetCurrentUserAsync();
-            
+
             if (user != null && user.StartOnHome)
             {
                 // Start on Home logic
@@ -217,7 +218,7 @@
             {
                 // Retrieve last state
                 var lastWorkspaceId = await LocalStorage.GetItemAsync<int?>("lastWorkspaceId");
-                
+
                 if (lastWorkspaceId.HasValue && Workspaces.Any(w => w.Id == lastWorkspaceId.Value))
                 {
                     await HandleWorkspaceSelected(lastWorkspaceId.Value);
@@ -229,29 +230,34 @@
                 }
                 else
                 {
-                     // No workspaces, go home
-                     await HandleWorkspaceSelected(-1);
+                    // No workspaces, go home
+                    await HandleWorkspaceSelected(-1);
                 }
             }
         }
         catch (Exception ex)
         {
-             // Log the error for debugging
-             Console.WriteLine($"Error loading data: {ex.Message}");
-             // Still set IsLoading to false so we can see something
+            // Log the error for debugging
+            Console.WriteLine($"Error loading data: {ex.Message}");
+            // Still set IsLoading to false so we can see something
         }
     }
 
     public void Dispose()
     {
         AuthStateProvider.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
+        WorkspaceService.OnWorkspacesChanged -= HandleWorkspaceListChanged;
+        if (ChatService != null)
+        {
+            ChatService.OnUserRemovedFromWorkspace -= HandleUserRemovedFromWorkspace;
+        }
         objRef?.Dispose();
     }
 
     private async Task HandleWorkspaceSelected(int workspaceId)
     {
         ActiveWorkspaceId = workspaceId;
-        
+
         if (workspaceId == -1 || workspaceId == -2)
         {
             CurrentWorkspace = null;
@@ -260,44 +266,44 @@
         }
         else
         {
-             CurrentWorkspace = Workspaces?.FirstOrDefault(w => w.Id == workspaceId);
-             if (CurrentWorkspace != null)
-             {
-                 await LocalStorage.SetItemAsync("lastWorkspaceId", workspaceId);
-                  
-                 // Handle AutoOpenLastChannel
-                 var user = UserService.CurrentUser;
-                 if (user != null && user.AutoOpenLastChannel)
-                 {
-                     var lastChannelId = await LocalStorage.GetItemAsync<int?>($"workspace_{workspaceId}_lastChannel");
-                     
-                     if (lastChannelId.HasValue)
-                     {
-                         var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
-                         var channel = channels.FirstOrDefault(c => c.Id == lastChannelId.Value);
-                         if (channel != null)
-                         {
-                             CurrentChannel = channel;
-                         }
-                         else
-                         {
-                             var general = channels.FirstOrDefault(c => c.Name == "general");
-                             CurrentChannel = general;
-                         }
-                     }
-                     else
-                     {
-                         var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
-                         CurrentChannel = channels.FirstOrDefault(c => c.Name == "general");
-                     }
-                 }
-                 else
-                 {
-                     CurrentChannel = null;
-                 }
-             }
+            CurrentWorkspace = Workspaces?.FirstOrDefault(w => w.Id == workspaceId);
+            if (CurrentWorkspace != null)
+            {
+                await LocalStorage.SetItemAsync("lastWorkspaceId", workspaceId);
+
+                // Handle AutoOpenLastChannel
+                var user = UserService.CurrentUser;
+                if (user != null && user.AutoOpenLastChannel)
+                {
+                    var lastChannelId = await LocalStorage.GetItemAsync<int?>($"workspace_{workspaceId}_lastChannel");
+
+                    if (lastChannelId.HasValue)
+                    {
+                        var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
+                        var channel = channels.FirstOrDefault(c => c.Id == lastChannelId.Value);
+                        if (channel != null)
+                        {
+                            CurrentChannel = channel;
+                        }
+                        else
+                        {
+                            var general = channels.FirstOrDefault(c => c.Name == "general");
+                            CurrentChannel = general;
+                        }
+                    }
+                    else
+                    {
+                        var channels = await WorkspaceService.GetWorkspaceChannelsAsync(workspaceId);
+                        CurrentChannel = channels.FirstOrDefault(c => c.Name == "general");
+                    }
+                }
+                else
+                {
+                    CurrentChannel = null;
+                }
+            }
         }
-        
+
         // Mobile: Navigate to channel list when workspace is selected
         if (isMobile)
         {
@@ -310,10 +316,10 @@
                 SetMobileView(MobileView.ChatArea);
             }
         }
-        
+
         StateHasChanged();
     }
-    
+
     private async void HandleChannelSelected(ChannelDto channel)
     {
         if (channel.WorkspaceId == null)
@@ -323,30 +329,30 @@
             CurrentWorkspace = null;
             await LocalStorage.RemoveItemAsync("lastWorkspaceId");
         }
-        
+
         CurrentChannel = channel;
-        
+
         if (CurrentWorkspace != null)
         {
             await LocalStorage.SetItemAsync($"workspace_{CurrentWorkspace.Id}_lastChannel", channel.Id);
         }
-        
+
         // Mobile: Navigate to chat area when channel is selected
         if (isMobile)
         {
             SetMobileView(MobileView.ChatArea);
         }
-        
+
         StateHasChanged();
     }
-    
+
     private async Task HandleWorkspacesReordered(List<WorkspaceDto> reorderedWorkspaces)
     {
         Workspaces = reorderedWorkspaces;
         var ids = Workspaces.Select(w => w.Id).ToList();
         await WorkspaceService.ReorderWorkspacesAsync(ids);
     }
-    
+
     private async Task HandleWorkspaceCreated(WorkspaceDto newWorkspace)
     {
         if (Workspaces == null) Workspaces = new List<WorkspaceDto>();
@@ -437,13 +443,42 @@
     {
         // User left the group, clear current channel and refresh DM list
         CurrentChannel = null;
-        
+
         // If we're on the DM list view (ActiveWorkspaceId == -2), refresh the list
         if (ActiveWorkspaceId == -2)
         {
             await DirectMessagesListRef?.RefreshDMs();
         }
-        
+
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async void HandleWorkspaceListChanged()
+    {
+        await LoadDataAsync();
+        StateHasChanged();
+    }
+
+    private void HandleUserRemovedFromWorkspace(int workspaceId)
+    {
+        InvokeAsync(async () =>
+        {
+            if (Workspaces != null)
+            {
+                var removedWorkspace = Workspaces.FirstOrDefault(w => w.Id == workspaceId);
+                if (removedWorkspace != null)
+                {
+                    Workspaces.Remove(removedWorkspace);
+                }
+            }
+
+            if (ActiveWorkspaceId == workspaceId)
+            {
+                // Force switch to home or another safe state
+                await HandleWorkspaceSelected(-1);
+            }
+
+            StateHasChanged();
+        });
     }
 }

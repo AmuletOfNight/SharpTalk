@@ -16,6 +16,8 @@ public class WorkspaceService
         _localStorage = localStorage;
     }
 
+    public event Action? OnWorkspacesChanged;
+
     public async Task<List<WorkspaceDto>> GetMyWorkspacesAsync()
     {
         await SetAuthHeader();
@@ -173,7 +175,12 @@ public class WorkspaceService
     {
         await SetAuthHeader();
         var response = await _httpClient.PostAsync($"api/invitation/{invitationId}/accept", null);
-        return response.IsSuccessStatusCode;
+        if (response.IsSuccessStatusCode)
+        {
+            OnWorkspacesChanged?.Invoke();
+            return true;
+        }
+        return false;
     }
 
     public async Task<bool> DeclineInvitationAsync(int invitationId)
@@ -194,6 +201,11 @@ public class WorkspaceService
     {
         await SetAuthHeader();
         var response = await _httpClient.PostAsync($"api/invitation/link/{code}/join", null);
-        return response.IsSuccessStatusCode;
+        if (response.IsSuccessStatusCode)
+        {
+            OnWorkspacesChanged?.Invoke();
+            return true;
+        }
+        return false;
     }
 }

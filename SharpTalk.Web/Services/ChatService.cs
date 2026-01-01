@@ -19,6 +19,7 @@ public class ChatService : IAsyncDisposable
     public event Action<MessageDto>? OnMessageReceived;
     public event Action<UserStatusDto>? OnUserStatusChanged;
     public event Action<int, int, string, bool>? OnUserTyping;
+    public event Action<int>? OnUserRemovedFromWorkspace;
 
     public ChatService(HttpClient httpClient, NavigationManager navigationManager, ILocalStorageService localStorage, IConfiguration configuration)
     {
@@ -63,6 +64,11 @@ public class ChatService : IAsyncDisposable
             _hubConnection.On<int, int, string, bool>("UserTyping", (channelId, userId, username, isTyping) =>
             {
                 OnUserTyping?.Invoke(channelId, userId, username, isTyping);
+            });
+
+            _hubConnection.On<int>("UserRemovedFromWorkspace", (workspaceId) =>
+            {
+                OnUserRemovedFromWorkspace?.Invoke(workspaceId);
             });
         }
 
